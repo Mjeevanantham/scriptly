@@ -1,0 +1,125 @@
+{
+  "name": "scriptly",
+  "displayName": "Scriptly - AI Code Assistant",
+  "description": "Free, unified IDE with AI-powered coding assistance",
+  "version": "0.1.0",
+  "publisher": "thejands",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Programming Languages", "AI", "Formatters"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "scriptly",
+          "title": "Scriptly",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "scriptly": [
+        {
+          "id": "scriptly.chatView",
+          "name": "Chat",
+          "type": "webview",
+          "contextualTitle": "Scriptly Chat",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "scriptly.startChat",
+        "title": "Open Scriptly Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "scriptly.chatView.focus",
+        "title": "Focus Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "scriptly.configureAPI",
+        "title": "Configure API Keys"
+      },
+      {
+        "command": "scriptly.gitClone",
+        "title": "Clone Repository"
+      },
+      {
+        "command": "scriptly.showLogs",
+        "title": "Show Log File",
+        "icon": "$(file-text)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "scriptly.startChat",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l"
+      }
+    ],
+    "configuration": {
+      "title": "Scriptly",
+      "properties": {
+        "scriptly.llmProvider": {
+          "type": "string",
+          "default": "openai",
+          "enum": ["openai", "claude", "ollama", "custom"],
+          "description": "Default LLM provider"
+        },
+        "scriptly.modelName": {
+          "type": "string",
+          "default": "gpt-4",
+          "description": "Default model name"
+        },
+        "scriptly.temperature": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Temperature for LLM responses"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p ./",
+    "dev": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run build",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "type-check": "tsc --noEmit",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "clean": "rm -rf out"
+  },
+  "dependencies": {
+    "@langchain/openai": "^0.0.14",
+    "@langchain/anthropic": "^0.1.16",
+    "@langchain/community": "^0.0.20",
+    "langchain": "^0.1.8",
+    "axios": "^1.6.8",
+    "isomorphic-git": "^1.25.4",
+    "zustand": "^4.5.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.25",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@types/vscode": "^1.80.2",
+    "@vscode/test-electron": "^2.3.9",
+    "typescript": "^5.4.2",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
+

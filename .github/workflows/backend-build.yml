@@ -1,0 +1,34 @@
+name: Build Backend Docker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/**'
+      - '.github/workflows/backend-build.yml'
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: cd packages/backend && pnpm run build
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/backend
+          push: false
+          tags: scriptly-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
