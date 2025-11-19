@@ -4,6 +4,7 @@ import * as path from 'path'
 import { LLMService } from '../services/LLMService'
 import { ConfigService } from '../services/ConfigService'
 import { Logger } from '../utils/Logger'
+import { VSCodeActions } from '../utils/VSCodeActions'
 import { ChatRequest } from '../types'
 
 export class MainViewProvider implements vscode.WebviewViewProvider {
@@ -37,7 +38,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     // Check if API key is configured
     const hasApiKey = await this._checkApiKeyConfigured()
 
-    webviewView.webview.html = this._getWebviewContent(webviewView.webview, hasApiKey)
+    // Get workspace path
+    const workspaceFolders = vscode.workspace.workspaceFolders
+    const workspacePath = workspaceFolders && workspaceFolders.length > 0
+      ? workspaceFolders[0].uri.fsPath
+      : ''
+
+    webviewView.webview.html = this._getWebviewContent(webviewView.webview, hasApiKey, workspacePath)
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -175,26 +182,59 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
       case 'codeReview':
         // Handle code review requests
         if (this._llmService && this._configService) {
-          // Placeholder for code review functionality
-          setTimeout(() => {
+          try {
+            const workspaceFolders = vscode.workspace.workspaceFolders
+            let codebaseContext = ''
+            if (workspaceFolders && workspaceFolders.length > 0) {
+              codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+            }
+            // Placeholder for code review functionality - results will be formatted in webview
+            setTimeout(() => {
+              this._view?.webview.postMessage({
+                command: 'reviewResults',
+                results: { 
+                  message: 'Code review feature coming soon',
+                  files: codebaseContext ? ['Check files for issues...'] : [],
+                },
+              })
+            }, 500)
+          } catch (error) {
+            Logger.error('MainViewProvider', 'Code review failed', error)
             this._view?.webview.postMessage({
               command: 'reviewResults',
-              results: { message: 'Code review feature coming soon' },
+              results: { error: error instanceof Error ? error.message : 'Unknown error' },
             })
-          }, 500)
+          }
         }
         break
 
       case 'research':
         // Handle research requests
         if (this._llmService && this._configService) {
-          // Placeholder for research functionality
-          setTimeout(() => {
+          try {
+            const workspaceFolders = vscode.workspace.workspaceFolders
+            let codebaseContext = ''
+            if (workspaceFolders && workspaceFolders.length > 0) {
+              codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+            }
+            // Placeholder for research functionality - results will be formatted in webview
+            setTimeout(() => {
+              this._view?.webview.postMessage({
+                command: 'researchResults',
+                results: [{ 
+                  file: 'example.ts', 
+                  content: 'Research results coming soon',
+                  filePath: workspaceFolders?.[0]?.uri.fsPath || '',
+                }],
+              })
+            }, 500)
+          } catch (error) {
+            Logger.error('MainViewProvider', 'Research failed', error)
             this._view?.webview.postMessage({
               command: 'researchResults',
-              results: [{ file: 'example.ts', content: 'Research results coming soon' }],
+              results: [{ error: error instanceof Error ? error.message : 'Unknown error' }],
             })
-          }, 500)
+          }
         }
         break
 
@@ -214,6 +254,77 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         }
         // Clear API keys from secrets (optional - user might want to keep them)
         // For now, just reset auth state
+        break
+
+      case 'openFile':
+        // Open file in VS Code editor at specified line and column
+        try {
+          const workspaceFolders = vscode.workspace.workspaceFolders
+          const workspacePath = workspaceFolders && workspaceFolders.length > 0 
+            ? workspaceFolders[0].uri.fsPath 
+            : undefined
+
+          await VSCodeActions.openFile(
+            message.filePath,
+            message.lineNumber,
+            message.column,
+            message.endLine,
+            workspacePath
+          )
+        } catch (error) {
+          Logger.error('MainViewProvider', 'Failed to open file', error)
+          if (this._view) {
+            this._view.webview.postMessage({
+              command: 'error',
+              error: `Failed to open file: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        }
+        break
+
+      case 'openURL':
+        // Open URL in external browser
+        try {
+          await VSCodeActions.openURL(message.url)
+        } catch (error) {
+          Logger.error('MainViewProvider', 'Failed to open URL', error)
+          if (this._view) {
+            this._view.webview.postMessage({
+              command: 'error',
+              error: `Failed to open URL: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        }
+        break
+
+      case 'openEmail':
+        // Open email client with mailto link
+        try {
+          await VSCodeActions.openEmail(message.email)
+        } catch (error) {
+          Logger.error('MainViewProvider', 'Failed to open email', error)
+          if (this._view) {
+            this._view.webview.postMessage({
+              command: 'error',
+              error: `Failed to open email: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        }
+        break
+
+      case 'showGitCommit':
+        // Show git commit information
+        try {
+          await VSCodeActions.showGitCommit(message.hash)
+        } catch (error) {
+          Logger.error('MainViewProvider', 'Failed to show git commit', error)
+          if (this._view) {
+            this._view.webview.postMessage({
+              command: 'error',
+              error: `Failed to show git commit: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        }
         break
 
       default:
@@ -328,7 +439,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private _getWebviewContent(webview: vscode.Webview, hasApiKey: boolean): string {
+  private _getWebviewContent(webview: vscode.Webview, hasApiKey: boolean, workspacePath: string = ''): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -347,6 +458,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                 const vscode = acquireVsCodeApi();
                 window.vscode = vscode;
                 window.initialState = { isAuthenticated: ${hasApiKey} };
+                window.workspacePath = ${JSON.stringify(workspacePath)};
                 
                 // Error handler
                 window.addEventListener('error', (e) => {
@@ -429,7 +541,15 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             if (!input || !input.value.trim()) return;
             
             const userMsg = input.value;
-            messages.innerHTML += '<div class="mb-4 text-right"><div class="inline-block p-3 bg-button-background text-button-foreground rounded-lg max-w-[80%]">' + escapeHtml(userMsg) + '</div></div>';
+            // Get workspace path from vscode if available
+            const workspacePath = (window.workspacePath || '');
+            // Format user message
+            const formattedUserMsg = MessageFormatter.formatMessage(userMsg, { enableClickHandlers: true, workspacePath: workspacePath });
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.className = 'mb-4 text-right';
+            userMsgDiv.innerHTML = '<div class="inline-block p-3 bg-button-background text-button-foreground rounded-lg max-w-[80%]">' + formattedUserMsg + '</div>';
+            messages.appendChild(userMsgDiv);
+            attachClickHandlers(userMsgDiv);
             input.value = '';
             messages.scrollTop = messages.scrollHeight;
             
@@ -442,14 +562,32 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                     fullResponse += data.chunk;
                     const lastMsg = messages.lastElementChild;
                     if (lastMsg && lastMsg.classList.contains('assistant')) {
-                        lastMsg.querySelector('.message-content').textContent = fullResponse;
+                        const contentEl = lastMsg.querySelector('.message-content');
+                        if (contentEl) {
+                            const workspacePath = (window.workspacePath || '');
+                            const formatted = MessageFormatter.formatMessage(fullResponse, { enableClickHandlers: true, workspacePath: workspacePath });
+                            contentEl.innerHTML = formatted;
+                            attachClickHandlers(contentEl);
+                        }
                     } else {
-                        messages.innerHTML += '<div class="mb-4 assistant"><div class="message-content p-3 bg-input-background border border-border rounded-lg max-w-[80%]">' + escapeHtml(fullResponse) + '</div></div>';
+                        const workspacePath = (window.workspacePath || '');
+                        const formatted = MessageFormatter.formatMessage(fullResponse, { enableClickHandlers: true, workspacePath: workspacePath });
+                        const assistantDiv = document.createElement('div');
+                        assistantDiv.className = 'mb-4 assistant';
+                        assistantDiv.innerHTML = '<div class="message-content p-3 bg-input-background border border-border rounded-lg max-w-[80%]">' + formatted + '</div>';
+                        messages.appendChild(assistantDiv);
+                        attachClickHandlers(assistantDiv.querySelector('.message-content'));
                     }
                     messages.scrollTop = messages.scrollHeight;
                 } else if (data.command === 'streamComplete' || data.command === 'error') {
                     if (data.command === 'error') {
-                        messages.innerHTML += '<div class="mb-4 assistant"><div class="message-content p-3 bg-error-bg text-error rounded-lg">Error: ' + escapeHtml(data.error || 'Unknown error') + '</div></div>';
+                        const errorMsg = 'Error: ' + (data.error || 'Unknown error');
+                        const formatted = MessageFormatter.formatMessage(errorMsg, { enableClickHandlers: true });
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'mb-4 assistant';
+                        errorDiv.innerHTML = '<div class="message-content p-3 bg-error-bg text-error rounded-lg">' + formatted + '</div>';
+                        messages.appendChild(errorDiv);
+                        attachClickHandlers(errorDiv.querySelector('.message-content'));
                     }
                     window.removeEventListener('message', listener);
                 }
@@ -467,24 +605,242 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             return div.innerHTML;
         }
         
+        // MessageFormatter utility (embedded for webview)
+        const MessageFormatter = {
+            formatMessage: function(content, options) {
+                options = options || {};
+                const enableClickHandlers = options.enableClickHandlers !== false;
+                const enableSyntaxHighlighting = options.enableSyntaxHighlighting !== false;
+                const workspacePath = options.workspacePath || '';
+                
+                let formatted = content;
+                
+                // Regex patterns - using String.fromCharCode to avoid template literal issues
+                const backtick = String.fromCharCode(96);
+                const codeBlockStart = backtick + backtick + backtick;
+                const codeBlockEnd = backtick + backtick + backtick;
+                const PATTERNS = {
+                    filepath: new RegExp('(?:^|\\\\s)([\\\\/\\\\\\\\]?[\\\\w\\\\s\\\\-\\\\.\\\\/\\\\\\\\]+\\\\.\\\\w{2,4})(?::(\\\\d+))?(?::(\\\\d+))?(?:-(\\\\d+))?(?=\\\\s|$|,|;|\\\\)|])', 'g'),
+                    url: new RegExp('(https?:\\\\/\\\\/[^\\\\s<>"{}|\\\\\\\\^' + backtick + '\\\\[\\\\]]+|www\\\\.[^\\\\s<>"{}|\\\\\\\\^' + backtick + '\\\\[\\\\]]+|mailto:[^\\\\s<>"{}|\\\\\\\\^' + backtick + '\\\\[\\\\]]+)', 'gi'),
+                    email: new RegExp('\\\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Z|a-z]{2,}\\\\b', 'g'),
+                    codeblock: new RegExp(codeBlockStart + '(\\\\w+)?\\\\n([\\\\s\\\\S]*?)' + codeBlockEnd, 'g'),
+                    inlinecode: new RegExp(backtick + '([^' + backtick + '\\\\n]+)' + backtick, 'g'),
+                    githash: new RegExp('\\\\b([a-f0-9]{7,40})\\\\b', 'g'),
+                    linenumber: new RegExp('(?:^|\\\\s)(L(\\\\d+)(?:-L(\\\\d+))?)(?=\\\\s|$)', 'g'),
+                    error: new RegExp('(Error|Exception|Warning|Fatal):\\\\s*([^\\\\n]+(?:\\\\n(?!\\\\s+at\\\\s)[^\\\\n]+)*)', 'gi'),
+                    stacktrace: new RegExp('(\\\\s+at\\\\s+[^\\\\s]+\\\\s+\\\\([^)]+:\\\\d+:\\\\d+\\\\)|\\\\s+at\\\\s+[^\\\\s]+\\\\s+\\\\([^)]+\\\\)|\\\\s+at\\\\s+<anonymous>)', 'g'),
+                };
+                
+                // Protect code blocks first
+                const codeBlocks = [];
+                formatted = formatted.replace(PATTERNS.codeblock, function(match, lang, code) {
+                    const id = '__CODEBLOCK_' + codeBlocks.length + '__';
+                    codeBlocks.push({ match, lang: lang || '', code });
+                    return id;
+                });
+                
+                // Protect inline code
+                const inlineCodes = [];
+                formatted = formatted.replace(PATTERNS.inlinecode, function(match, code) {
+                    const id = '__INLINECODE_' + inlineCodes.length + '__';
+                    inlineCodes.push(code);
+                    return id;
+                });
+                
+                // Format URLs (before emails)
+                formatted = formatted.replace(PATTERNS.url, function(match) {
+                    let normalizedUrl = match;
+                    if (match.startsWith('www.')) {
+                        normalizedUrl = 'https://' + match;
+                    }
+                    const escaped = escapeHtml(match);
+                    if (enableClickHandlers && !match.startsWith('mailto:')) {
+                        return '<a class="formatted-link" href="' + escapeHtml(normalizedUrl) + '" target="_blank" data-url="' + escapeHtml(normalizedUrl) + '">' + escaped + '</a>';
+                    }
+                    return '<span class="formatted-link-no-click">' + escaped + '</span>';
+                });
+                
+                // Format emails (only if not already formatted as URL)
+                formatted = formatted.replace(PATTERNS.email, function(match) {
+                    if (formatted.indexOf('data-email="' + match + '"') === -1) {
+                        const escaped = escapeHtml(match);
+                        if (enableClickHandlers) {
+                            return '<a class="formatted-email" href="mailto:' + escapeHtml(match) + '" data-email="' + escapeHtml(match) + '">' + escaped + '</a>';
+                        }
+                        return '<span class="formatted-email-no-click">' + escaped + '</span>';
+                    }
+                    return match;
+                });
+                
+                // Format file paths
+                formatted = formatted.replace(PATTERNS.filepath, function(match, filePath, lineNumber, column, endLine) {
+                    const fullPath = filePath.trim();
+                    if (match.indexOf('://') !== -1 || match.indexOf('www.') !== -1) {
+                        return match;
+                    }
+                    const line = lineNumber ? parseInt(lineNumber, 10) : undefined;
+                    const col = column ? parseInt(column, 10) : undefined;
+                    const end = endLine ? parseInt(endLine, 10) : undefined;
+                    let display = fullPath;
+                    if (line) {
+                        display += ':' + line;
+                        if (col) display += ':' + col;
+                        if (end) display += '-' + end;
+                    }
+                    const escaped = escapeHtml(display);
+                    if (enableClickHandlers) {
+                        return '<span class="formatted-filepath" data-file-path="' + escapeHtml(fullPath) + '" data-line-number="' + (line || '') + '" data-column="' + (col || '') + '" data-end-line="' + (end || '') + '" data-workspace-path="' + escapeHtml(workspacePath) + '">' + escaped + '</span>';
+                    }
+                    return '<span class="formatted-filepath-no-click">' + escaped + '</span>';
+                });
+                
+                // Format git hashes
+                formatted = formatted.replace(PATTERNS.githash, function(match) {
+                    if (match.length < 7 || match.length > 40 || formatted.indexOf('data-hash="' + match + '"') !== -1) {
+                        return match;
+                    }
+                    const escaped = escapeHtml(match);
+                    if (enableClickHandlers) {
+                        return '<span class="formatted-git-hash" data-hash="' + escapeHtml(match) + '">' + escaped + '</span>';
+                    }
+                    return '<span class="formatted-git-hash-no-click">' + escaped + '</span>';
+                });
+                
+                // Format line number references
+                formatted = formatted.replace(PATTERNS.linenumber, function(match, fullMatch, startLine, endLine) {
+                    const start = parseInt(startLine, 10);
+                    const end = endLine ? parseInt(endLine, 10) : undefined;
+                    const display = end ? 'L' + start + '-L' + end : 'L' + start;
+                    const escaped = escapeHtml(display);
+                    return '<span class="formatted-line-number" data-line-start="' + start + '" data-line-end="' + (end || '') + '">' + escaped + '</span>';
+                });
+                
+                // Format errors
+                formatted = formatted.replace(PATTERNS.error, function(match) {
+                    const escaped = escapeHtml(match);
+                    return '<div class="formatted-error">' + escaped + '</div>';
+                });
+                
+                // Format stack traces
+                formatted = formatted.replace(PATTERNS.stacktrace, function(match) {
+                    const escaped = escapeHtml(match);
+                    return '<div class="formatted-stack-trace">' + escaped + '</div>';
+                });
+                
+                // Restore inline code
+                inlineCodes.forEach(function(code, index) {
+                    const id = '__INLINECODE_' + index + '__';
+                    const escaped = escapeHtml(code);
+                    formatted = formatted.replace(id, '<code class="formatted-inline-code">' + escaped + '</code>');
+                });
+                
+                // Restore code blocks with syntax highlighting
+                codeBlocks.forEach(function(block, index) {
+                    const id = '__CODEBLOCK_' + index + '__';
+                    const escaped = escapeHtml(block.code);
+                    const lang = block.lang ? ' data-language="' + escapeHtml(block.lang.toLowerCase()) + '"' : '';
+                    formatted = formatted.replace(id, '<pre class="formatted-code-block"' + lang + '><code>' + escaped + '</code></pre>');
+                });
+                
+                // Convert remaining newlines to <br>
+                formatted = formatted.replace(/\n/g, '<br>');
+                
+                return formatted;
+            }
+        };
+        
+        // Click handler attachment function
+        function attachClickHandlers(element) {
+            if (!element) return;
+            
+            // File path clicks
+            element.querySelectorAll('.formatted-filepath').forEach(function(el) {
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const filePath = el.getAttribute('data-file-path');
+                    const lineNumber = el.getAttribute('data-line-number') ? parseInt(el.getAttribute('data-line-number'), 10) : undefined;
+                    const column = el.getAttribute('data-column') ? parseInt(el.getAttribute('data-column'), 10) : undefined;
+                    const endLine = el.getAttribute('data-end-line') ? parseInt(el.getAttribute('data-end-line'), 10) : undefined;
+                    vscode.postMessage({
+                        command: 'openFile',
+                        filePath: filePath,
+                        lineNumber: lineNumber,
+                        column: column,
+                        endLine: endLine
+                    });
+                });
+            });
+            
+            // URL clicks (prevent default to handle via VS Code)
+            element.querySelectorAll('.formatted-link').forEach(function(el) {
+                el.addEventListener('click', function(e) {
+                    const url = el.getAttribute('data-url') || el.getAttribute('href');
+                    if (url) {
+                        e.preventDefault();
+                        vscode.postMessage({ command: 'openURL', url: url });
+                    }
+                });
+            });
+            
+            // Email clicks
+            element.querySelectorAll('.formatted-email').forEach(function(el) {
+                el.addEventListener('click', function(e) {
+                    const email = el.getAttribute('data-email') || el.getAttribute('href').replace('mailto:', '');
+                    if (email) {
+                        e.preventDefault();
+                        vscode.postMessage({ command: 'openEmail', email: email });
+                    }
+                });
+            });
+            
+            // Git hash clicks
+            element.querySelectorAll('.formatted-git-hash').forEach(function(el) {
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const hash = el.getAttribute('data-hash');
+                    if (hash) {
+                        vscode.postMessage({ command: 'showGitCommit', hash: hash });
+                    }
+                });
+            });
+        }
+        
+        // SVG Icon Helper Functions
+        function getIconSVG(name, size) {
+            size = size || 16;
+            const icons = {
+                chat: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M2 2h12v10H4l-2 2V2zm1 1v8h10V3H3zm2 2h6v1H5V5zm0 2h4v1H5V7z"/></svg>',
+                code: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M5.854 4.146a.5.5 0 0 1 0 .708L2.707 8l3.147 3.146a.5.5 0 0 1-.708.708l-3.5-3.5a.5.5 0 0 1 0-.708l3.5-3.5a.5.5 0 0 1 .708 0zm4.292 0a.5.5 0 0 0 0 .708L13.293 8l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5a.5.5 0 0 0-.708 0z"/></svg>',
+                research: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>',
+                bug: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM4.5 7.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7z"/></svg>',
+                refactor: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .384.18l1.5 1.5a.5.5 0 0 1-.768.64L13 7.5H9.677l1.801 5.852a.5.5 0 0 1-.727.64L4.5 9.5H1a.5.5 0 0 1 0-1h3.5l4.852-3.86a.5.5 0 0 1 .899-.1z"/></svg>',
+                test: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>',
+                deployment: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 0L0 4l8 4 8-4-8-4zM0 12l8 4 8-4M0 8l8 4 8-4M8 0v8"/></svg>',
+                settings: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.292-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.292c.415.764-.42 1.6-1.185 1.184l-.292-.159a1.873 1.873 0 0 0-2.692 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.693-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.292A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/></svg>',
+                logout: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/><path d="M15.854 8.354l-3-3a.5.5 0 0 0-.708.708L14.293 8H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708z"/></svg>',
+                back: '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/></svg>'
+            };
+            return '<span class="icon" style="width: ' + size + 'px; height: ' + size + 'px;">' + (icons[name] || '') + '</span>';
+        }
+        
         function renderLogin() {
-            root.innerHTML = '<div class="login-page flex items-center justify-center h-full p-8">' +
+            root.innerHTML = '<div class="login-page flex items-center justify-center h-full p-8" style="min-height: 100vh;">' +
                 '<div class="login-container w-full max-w-md">' +
-                    '<div class="login-header text-center mb-8">' +
-                        '<h1 class="text-3xl font-semibold mb-2" style="color: var(--text-primary); letter-spacing: 0.05em;">SCRIPTLY</h1>' +
-                        '<p class="text-sm" style="color: var(--text-secondary);">Enter your API key to get started</p>' +
+                    '<div class="login-header text-center mb-10">' +
+                        '<h1 class="text-4xl font-semibold mb-3" style="color: var(--text-primary); letter-spacing: 0.05em; font-weight: 600;">SCRIPTLY</h1>' +
+                        '<p class="text-sm" style="color: var(--text-secondary); font-size: 0.875rem;">Enter your API key to get started</p>' +
                     '</div>' +
-                    '<form id="loginForm" class="login-form space-y-4">' +
-                        '<div><label class="block text-sm mb-2" style="color: var(--text-primary);">Provider</label>' +
-                        '<select id="provider" class="w-full p-2 bg-input-background border border-border rounded" style="color: var(--text-primary);">' +
+                    '<form id="loginForm" class="login-form space-y-5">' +
+                        '<div><label class="block text-sm mb-2 font-medium" style="color: var(--text-primary);">Provider</label>' +
+                        '<select id="provider" class="w-full p-3 bg-input-background border border-border rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1" style="color: var(--text-primary); border-color: var(--input-border);">' +
                             '<option value="openai">OpenAI</option>' +
                             '<option value="claude">Anthropic Claude</option>' +
                             '<option value="ollama">Ollama (Local)</option>' +
                         '</select></div>' +
-                        '<div><label class="block text-sm mb-2" style="color: var(--text-primary);">API Key</label>' +
+                        '<div><label class="block text-sm mb-2 font-medium" style="color: var(--text-primary);">API Key</label>' +
                         '<input type="password" id="apiKey" placeholder="Enter your API key" ' +
-                               'class="w-full p-2 bg-input-background border border-border rounded" style="color: var(--text-primary);" required></div>' +
-                        '<button type="submit" class="w-full p-3 bg-button-background text-button-foreground rounded hover:bg-button-hover font-medium">Continue</button>' +
+                               'class="w-full p-3 bg-input-background border border-border rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1" style="color: var(--text-primary); border-color: var(--input-border);" required></div>' +
+                        '<button type="submit" class="w-full p-3 rounded-md font-medium transition-all hover:opacity-90" style="background: var(--color-primary); color: white; font-weight: 500;">Continue</button>' +
                     '</form>' +
                 '</div>' +
             '</div>';
@@ -498,41 +854,41 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         
         function renderDashboard() {
             root.innerHTML = '<div class="dashboard-page p-8">' +
-                '<div class="dashboard-header mb-8 flex items-center justify-between">' +
-                    '<div><h1 class="text-2xl font-semibold mb-2" style="color: var(--text-primary);">Dashboard</h1>' +
-                    '<p class="text-sm" style="color: var(--text-secondary);">Welcome back! What would you like to do?</p></div>' +
-                    '<button onclick="window.logout()" class="logout-btn px-3 py-1.5 bg-input-background border border-border rounded text-sm hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-logout"></span> Logout' +
+                '<div class="dashboard-header mb-10 flex items-center justify-between">' +
+                    '<div><h1 class="text-3xl font-semibold mb-2" style="color: var(--text-primary); font-weight: 600;">Dashboard</h1>' +
+                    '<p class="text-sm" style="color: var(--text-secondary); font-size: 0.875rem;">Welcome back! What would you like to do?</p></div>' +
+                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded-md text-sm transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('logout', 16) + ' Logout' +
                     '</button>' +
                 '</div>' +
-                '<div class="quick-actions grid grid-cols-2 gap-4">' +
-                    '<button data-page="chat" class="action-card p-6 bg-input-background border border-border rounded-lg hover:border-focus-border text-left cursor-pointer transition-all mode-chat">' +
-                        '<div class="flex items-center gap-3 mb-3">' +
-                        '<span class="icon icon-chat text-xl" style="color: var(--mode-chat-accent);"></span>' +
-                        '<h3 class="font-semibold" style="color: var(--text-primary);">Chat</h3>' +
+                '<div class="quick-actions grid grid-cols-2 gap-6">' +
+                    '<button data-page="chat" class="action-card p-6 bg-input-background border border-border rounded-lg text-left cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="flex items-center gap-3 mb-4">' +
+                        '<span class="icon icon-primary icon-lg">' + getIconSVG('chat', 24) + '</span>' +
+                        '<h3 class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">Chat</h3>' +
                     '</div>' +
-                        '<p class="text-sm" style="color: var(--text-secondary);">Ask questions about your code</p>' +
+                        '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Ask questions about your code</p>' +
                     '</button>' +
-                    '<button data-page="code-review" class="action-card p-6 bg-input-background border border-border rounded-lg hover:border-focus-border text-left cursor-pointer transition-all mode-code">' +
-                        '<div class="flex items-center gap-3 mb-3">' +
-                            '<span class="icon icon-code text-xl" style="color: var(--mode-code-accent);"></span>' +
-                        '<h3 class="font-semibold" style="color: var(--text-primary);">Code Review</h3>' +
+                    '<button data-page="code-review" class="action-card p-6 bg-input-background border border-border rounded-lg text-left cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="flex items-center gap-3 mb-4">' +
+                            '<span class="icon icon-lg" style="color: #6B8E23;">' + getIconSVG('code', 24) + '</span>' +
+                        '<h3 class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">Code Review</h3>' +
                     '</div>' +
-                        '<p class="text-sm" style="color: var(--text-secondary);">Review and refactor code</p>' +
+                        '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Review and refactor code</p>' +
                     '</button>' +
-                    '<button data-page="research" class="action-card p-6 bg-input-background border border-border rounded-lg hover:border-focus-border text-left cursor-pointer transition-all mode-research">' +
-                        '<div class="flex items-center gap-3 mb-3">' +
-                            '<span class="icon icon-research text-xl" style="color: var(--mode-research-accent);"></span>' +
-                        '<h3 class="font-semibold" style="color: var(--text-primary);">Research</h3>' +
+                    '<button data-page="research" class="action-card p-6 bg-input-background border border-border rounded-lg text-left cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="flex items-center gap-3 mb-4">' +
+                            '<span class="icon icon-lg" style="color: #5C5470;">' + getIconSVG('research', 24) + '</span>' +
+                        '<h3 class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">Research</h3>' +
                     '</div>' +
-                        '<p class="text-sm" style="color: var(--text-secondary);">Search your codebase</p>' +
+                        '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Search your codebase</p>' +
                     '</button>' +
-                    '<button data-page="deployment" class="action-card p-6 bg-input-background border border-border rounded-lg hover:border-focus-border text-left cursor-pointer transition-all">' +
-                        '<div class="flex items-center gap-3 mb-3">' +
-                            '<span class="icon icon-deployment text-xl" style="color: var(--link);"></span>' +
-                            '<h3 class="font-semibold" style="color: var(--text-primary);">Deployment</h3>' +
+                    '<button data-page="deployment" class="action-card p-6 bg-input-background border border-border rounded-lg text-left cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="flex items-center gap-3 mb-4">' +
+                            '<span class="icon icon-lg" style="color: #7B2B12;">' + getIconSVG('deployment', 24) + '</span>' +
+                            '<h3 class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">Deployment</h3>' +
                         '</div>' +
-                        '<p class="text-sm" style="color: var(--text-secondary);">Deploy your application</p>' +
+                        '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Deploy your application</p>' +
                     '</button>' +
                 '</div>' +
             '</div>';
@@ -547,26 +903,27 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         function renderChat() {
             document.body.setAttribute('data-mode', 'chat');
             root.innerHTML = '<div class="chat-page flex flex-col h-full">' +
-                '<div class="chat-header border-b border-border p-3 flex items-center justify-between" style="border-bottom-color: var(--mode-chat-accent);">' +
-                    '<div class="flex items-center gap-2">' +
-                        '<span class="icon icon-chat text-lg" style="color: var(--mode-chat-accent);"></span>' +
-                        '<h2 class="text-lg font-semibold" style="color: var(--text-primary);">Chat</h2>' +
+                '<div class="chat-header border-b p-4 flex items-center justify-between" style="border-bottom-color: var(--color-primary); background: var(--surface);">' +
+                    '<div class="flex items-center gap-3">' +
+                        '<span class="icon icon-primary icon-lg">' + getIconSVG('chat', 20) + '</span>' +
+                        '<h2 class="text-lg font-semibold" style="color: var(--text-primary); font-weight: 600;">Chat</h2>' +
                     '</div>' +
                     '<div class="flex gap-2">' +
-                        '<button data-action="dashboard" class="back-btn px-3 py-1.5 bg-input-background border border-border rounded text-sm hover:bg-button-background hover:text-button-foreground cursor-pointer flex items-center gap-1.5">' +
-                            '<span class="icon icon-back"></span> Back' +
+                        '<button data-action="dashboard" class="back-btn px-3 py-2 bg-input-background border border-border rounded-md text-sm transition-all hover:bg-button-background hover:text-button-foreground cursor-pointer flex items-center gap-2" style="font-weight: 500;">' +
+                            getIconSVG('back', 16) + ' Back' +
                         '</button>' +
-                        '<button onclick="window.logout()" class="logout-btn px-3 py-1.5 bg-input-background border border-border rounded text-sm hover:bg-button-background hover:text-button-foreground cursor-pointer flex items-center gap-1.5">' +
-                            '<span class="icon icon-logout"></span> Logout' +
+                        '<button onclick="window.logout()" class="logout-btn px-3 py-2 bg-input-background border border-border rounded-md text-sm transition-all hover:bg-button-background hover:text-button-foreground cursor-pointer flex items-center gap-2" style="font-weight: 500;">' +
+                            getIconSVG('logout', 16) + ' Logout' +
                         '</button>' +
                     '</div>' +
                 '</div>' +
-                '<div class="messages-container flex-1 overflow-y-auto p-4" id="messages"><div class="welcome-message text-center mt-8"><p style="color: var(--text-secondary);">Welcome to Scriptly Chat! Ask me anything about your code.</p></div></div>' +
-                '<div class="input-container border-t border-border p-4">' +
-                    '<div class="input-wrapper flex gap-2">' +
+                '<div class="messages-container flex-1 overflow-y-auto p-6" id="messages" style="background: var(--surface);"><div class="welcome-message text-center mt-12"><p style="color: var(--text-secondary); font-size: 0.875rem;">Welcome to Scriptly Chat! Ask me anything about your code.</p></div></div>' +
+                '<script>if (typeof attachClickHandlers === "function") { setTimeout(function() { attachClickHandlers(document.getElementById("messages")); }, 100); }</script>' +
+                '<div class="input-container border-t p-4" style="border-top-color: var(--border-subtle); background: var(--surface);">' +
+                    '<div class="input-wrapper flex gap-3">' +
                         '<input type="text" id="chatInput" placeholder="Ask about your code..." ' +
-                               'class="flex-1 p-2 bg-input-background border border-border rounded" style="color: var(--text-primary);" />' +
-                        '<button id="sendBtn" class="px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer">Send</button>' +
+                               'class="flex-1 p-3 bg-input-background border border-border rounded-md transition-all focus:outline-none focus:ring-2" style="color: var(--text-primary); border-color: var(--input-border); font-size: 0.875rem;" />' +
+                        '<button id="sendBtn" class="px-6 py-3 rounded-md transition-all hover:opacity-90 cursor-pointer font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">Send</button>' +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -590,35 +947,67 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         }
         
         function renderCodeReview() {
-            document.body.setAttribute('data-mode', 'code');
+            document.body.setAttribute('data-mode', 'bugfix');
             root.innerHTML = '<div class="code-review-page p-8">' +
-                '<div class="page-header mb-6">' +
-                    '<div class="flex items-center gap-2 mb-2">' +
-                        '<span class="icon icon-code text-2xl" style="color: var(--mode-code-accent);"></span>' +
-                        '<h1 class="text-2xl font-semibold" style="color: var(--text-primary);">Code Review</h1>' +
+                '<div class="page-header mb-8">' +
+                    '<div class="flex items-center gap-3 mb-3">' +
+                        '<span class="icon icon-lg" style="color: #6B8E23;">' + getIconSVG('code', 24) + '</span>' +
+                        '<h1 class="text-3xl font-semibold" style="color: var(--text-primary); font-weight: 600;">Code Review</h1>' +
                     '</div>' +
-                    '<p class="text-sm" style="color: var(--text-secondary);">Analyze, refactor, and improve your code</p>' +
+                    '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Analyze, refactor, and improve your code</p>' +
                 '</div>' +
-                '<div class="actions flex gap-2 mb-6">' +
-                    '<button data-action="findBugs" class="action-btn px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer flex items-center gap-2">' +
-                        '<span class="icon icon-bug"></span> Find Bugs' +
+                '<div class="actions flex gap-3 mb-8">' +
+                    '<button data-action="findBugs" class="action-btn px-5 py-3 rounded-md transition-all hover:opacity-90 cursor-pointer flex items-center gap-2 font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">' +
+                        getIconSVG('bug', 18) + ' Find Bugs' +
                     '</button>' +
-                    '<button data-action="refactor" class="action-btn px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer flex items-center gap-2">' +
-                        '<span class="icon icon-refactor"></span> Suggest Refactoring' +
+                    '<button data-action="refactor" class="action-btn px-5 py-3 rounded-md transition-all hover:opacity-90 cursor-pointer flex items-center gap-2 font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">' +
+                        getIconSVG('refactor', 18) + ' Suggest Refactoring' +
                     '</button>' +
-                    '<button data-action="generateTests" class="action-btn px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer flex items-center gap-2">' +
-                        '<span class="icon icon-test"></span> Generate Tests' +
+                    '<button data-action="generateTests" class="action-btn px-5 py-3 rounded-md transition-all hover:opacity-90 cursor-pointer flex items-center gap-2 font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">' +
+                        getIconSVG('test', 18) + ' Generate Tests' +
                     '</button>' +
                 '</div>' +
-                '<div class="flex gap-2">' +
-                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-back"></span> Back' +
+                '<div class="flex gap-3">' +
+                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('back', 16) + ' Back' +
                     '</button>' +
-                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-logout"></span> Logout' +
+                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('logout', 16) + ' Logout' +
                     '</button>' +
                 '</div>' +
             '</div>';
+            // Listen for review results
+            const reviewResultsListener = function(event) {
+                const data = event.data;
+                if (data.command === 'reviewResults') {
+                    const resultsContainer = document.getElementById('reviewResults');
+                    if (!resultsContainer) {
+                        const container = document.createElement('div');
+                        container.id = 'reviewResults';
+                        container.className = 'mt-6 p-4 bg-input-background border border-border rounded-lg';
+                        root.querySelector('.code-review-page').appendChild(container);
+                    }
+                    const container = document.getElementById('reviewResults');
+                    if (container) {
+                        const workspacePath = (window.workspacePath || '');
+                        let resultsHtml = '';
+                        if (data.results.error) {
+                            resultsHtml = MessageFormatter.formatMessage('Error: ' + data.results.error, { enableClickHandlers: true, workspacePath: workspacePath });
+                        } else if (data.results.message) {
+                            resultsHtml = MessageFormatter.formatMessage(data.results.message, { enableClickHandlers: true, workspacePath: workspacePath });
+                        } else if (data.results.files && data.results.files.length > 0) {
+                            resultsHtml = '<div class="space-y-2">' + data.results.files.map(function(file) {
+                                return '<div class="p-2 border border-border rounded">' + MessageFormatter.formatMessage(file, { enableClickHandlers: true, workspacePath: workspacePath }) + '</div>';
+                            }).join('') + '</div>';
+                        }
+                        container.innerHTML = resultsHtml;
+                        attachClickHandlers(container);
+                    }
+                    window.removeEventListener('message', reviewResultsListener);
+                }
+            };
+            window.addEventListener('message', reviewResultsListener);
+            
             // Add event listeners
             root.querySelectorAll('.action-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -635,31 +1024,64 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         function renderResearch() {
             document.body.setAttribute('data-mode', 'research');
             root.innerHTML = '<div class="research-page p-8">' +
-                '<div class="page-header mb-6">' +
-                    '<div class="flex items-center gap-2 mb-2">' +
-                        '<span class="icon icon-research text-2xl" style="color: var(--mode-research-accent);"></span>' +
-                        '<h1 class="text-2xl font-semibold" style="color: var(--text-primary);">Research</h1>' +
+                '<div class="page-header mb-8">' +
+                    '<div class="flex items-center gap-3 mb-3">' +
+                        '<span class="icon icon-lg" style="color: #5C5470;">' + getIconSVG('research', 24) + '</span>' +
+                        '<h1 class="text-3xl font-semibold" style="color: var(--text-primary); font-weight: 600;">Research</h1>' +
                     '</div>' +
-                    '<p class="text-sm" style="color: var(--text-secondary);">Search your codebase with AI-powered semantic search</p>' +
+                    '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Search your codebase with AI-powered semantic search</p>' +
                 '</div>' +
-                '<div class="search-container mb-6">' +
-                    '<div class="search-input-wrapper flex gap-2">' +
+                '<div class="search-container mb-8">' +
+                    '<div class="search-input-wrapper flex gap-3">' +
                         '<input type="text" id="searchQuery" placeholder="Search codebase..." ' +
-                               'class="flex-1 p-3 bg-input-background border border-border rounded" style="color: var(--text-primary);" />' +
-                        '<button id="searchBtn" class="px-6 py-3 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer flex items-center gap-2">' +
-                            '<span class="icon icon-research"></span> Search' +
+                               'class="flex-1 p-4 bg-input-background border border-border rounded-md transition-all focus:outline-none focus:ring-2 text-base" style="color: var(--text-primary); border-color: var(--input-border);" />' +
+                        '<button id="searchBtn" class="px-8 py-4 rounded-md transition-all hover:opacity-90 cursor-pointer flex items-center gap-2 font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">' +
+                            getIconSVG('research', 18) + ' Search' +
                         '</button>' +
                     '</div>' +
                 '</div>' +
-                '<div class="flex gap-2">' +
-                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-back"></span> Back' +
+                '<div class="flex gap-3">' +
+                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('back', 16) + ' Back' +
                     '</button>' +
-                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-logout"></span> Logout' +
+                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('logout', 16) + ' Logout' +
                     '</button>' +
                 '</div>' +
             '</div>';
+            // Listen for research results
+            const researchResultsListener = function(event) {
+                const data = event.data;
+                if (data.command === 'researchResults') {
+                    const resultsContainer = document.getElementById('researchResults');
+                    if (!resultsContainer) {
+                        const container = document.createElement('div');
+                        container.id = 'researchResults';
+                        container.className = 'mt-6 space-y-4';
+                        root.querySelector('.research-page').insertBefore(container, root.querySelector('.flex.gap-2'));
+                    }
+                    const container = document.getElementById('researchResults');
+                    if (container) {
+                        const workspacePath = (window.workspacePath || '');
+                        let resultsHtml = '';
+                        if (data.results && data.results.length > 0) {
+                            resultsHtml = data.results.map(function(result) {
+                                if (result.error) {
+                                    return '<div class="p-4 bg-error-bg border border-border rounded-lg">' + MessageFormatter.formatMessage('Error: ' + result.error, { enableClickHandlers: true, workspacePath: workspacePath }) + '</div>';
+                                }
+                                const fileInfo = result.file ? '<div class="font-semibold mb-2" style="color: var(--text-primary);">' + MessageFormatter.formatMessage(result.file, { enableClickHandlers: true, workspacePath: workspacePath }) + '</div>' : '';
+                                const content = result.content ? '<div class="p-3 bg-input-background border border-border rounded">' + MessageFormatter.formatMessage(result.content, { enableClickHandlers: true, workspacePath: workspacePath }) + '</div>' : '';
+                                return '<div class="p-4 bg-input-background border border-border rounded-lg">' + fileInfo + content + '</div>';
+                            }).join('');
+                        }
+                        container.innerHTML = resultsHtml;
+                        attachClickHandlers(container);
+                    }
+                    window.removeEventListener('message', researchResultsListener);
+                }
+            };
+            window.addEventListener('message', researchResultsListener);
+            
             // Add event listeners
             const searchInput = document.getElementById('searchQuery');
             const searchBtn = document.getElementById('searchBtn');
@@ -686,23 +1108,23 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         function renderSettings() {
             document.body.setAttribute('data-mode', 'settings');
             root.innerHTML = '<div class="settings-page p-8">' +
-                '<div class="page-header mb-6">' +
-                    '<div class="flex items-center gap-2 mb-2">' +
-                        '<span class="icon icon-settings text-2xl" style="color: var(--mode-settings-accent);"></span>' +
-                        '<h1 class="text-2xl font-semibold" style="color: var(--text-primary);">Settings</h1>' +
+                '<div class="page-header mb-8">' +
+                    '<div class="flex items-center gap-3 mb-3">' +
+                        '<span class="icon icon-lg" style="color: #5C5470;">' + getIconSVG('settings', 24) + '</span>' +
+                        '<h1 class="text-3xl font-semibold" style="color: var(--text-primary); font-weight: 600;">Settings</h1>' +
                     '</div>' +
-                    '<p class="text-sm" style="color: var(--text-secondary);">Configure your Scriptly preferences</p>' +
+                    '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Configure your Scriptly preferences</p>' +
                 '</div>' +
-                '<div class="setting-section mb-6 p-4 bg-input-background border border-border rounded">' +
-                    '<h2 class="text-lg font-semibold mb-3" style="color: var(--text-primary);">API Keys</h2>' +
-                    '<button id="configureApiBtn" class="px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer">Configure API Keys</button>' +
+                '<div class="setting-section mb-8 p-6 bg-input-background border border-border rounded-lg" style="border-color: var(--border-subtle);">' +
+                    '<h2 class="text-lg font-semibold mb-4" style="color: var(--text-primary); font-weight: 600;">API Keys</h2>' +
+                    '<button id="configureApiBtn" class="px-5 py-3 rounded-md transition-all hover:opacity-90 cursor-pointer font-medium" style="background: var(--color-primary); color: white; font-weight: 500;">Configure API Keys</button>' +
                 '</div>' +
-                '<div class="flex gap-2">' +
-                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-back"></span> Back' +
+                '<div class="flex gap-3">' +
+                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('back', 16) + ' Back' +
                     '</button>' +
-                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-button-background text-button-foreground rounded hover:bg-button-hover cursor-pointer flex items-center gap-1.5">' +
-                        '<span class="icon icon-logout"></span> Logout' +
+                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('logout', 16) + ' Logout' +
                     '</button>' +
                 '</div>' +
             '</div>';
@@ -721,34 +1143,35 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         }
         
         function renderDeployment() {
+            document.body.setAttribute('data-mode', 'deployment');
             root.innerHTML = '<div class="deployment-page p-8">' +
-                '<div class="page-header mb-6">' +
-                    '<div class="flex items-center gap-2 mb-2">' +
-                        '<span class="icon icon-deployment text-2xl" style="color: var(--link);"></span>' +
-                        '<h1 class="text-2xl font-semibold" style="color: var(--text-primary);">Deployment</h1>' +
+                '<div class="page-header mb-8">' +
+                    '<div class="flex items-center gap-3 mb-3">' +
+                        '<span class="icon icon-lg" style="color: #7B2B12;">' + getIconSVG('deployment', 24) + '</span>' +
+                        '<h1 class="text-3xl font-semibold" style="color: var(--text-primary); font-weight: 600;">Deployment</h1>' +
                     '</div>' +
-                    '<p class="text-sm" style="color: var(--text-secondary);">Deploy your application to cloud platforms</p>' +
+                    '<p class="text-sm leading-relaxed" style="color: var(--text-secondary); font-size: 0.875rem;">Deploy your application to cloud platforms</p>' +
                 '</div>' +
-                '<div class="targets-grid grid grid-cols-3 gap-4 mb-6">' +
-                    '<button class="target-card p-6 border rounded-lg text-center bg-input-background border-border hover:border-focus-border cursor-pointer transition-all">' +
-                        '<div class="mb-2"><span class="icon icon-deployment text-3xl" style="color: var(--link);"></span></div>' +
-                        '<div class="font-semibold" style="color: var(--text-primary);">Vercel</div>' +
+                '<div class="targets-grid grid grid-cols-3 gap-6 mb-8">' +
+                    '<button class="target-card p-8 border rounded-lg text-center bg-input-background border-border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="mb-4"><span class="icon icon-xl" style="color: #7B2B12;">' + getIconSVG('deployment', 32) + '</span></div>' +
+                        '<div class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">Vercel</div>' +
                     '</button>' +
-                    '<button class="target-card p-6 border rounded-lg text-center bg-input-background border-border hover:border-focus-border cursor-pointer transition-all">' +
-                        '<div class="mb-2"><span class="icon icon-deployment text-3xl" style="color: var(--link);"></span></div>' +
-                        '<div class="font-semibold" style="color: var(--text-primary);">AWS</div>' +
+                    '<button class="target-card p-8 border rounded-lg text-center bg-input-background border-border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="mb-4"><span class="icon icon-xl" style="color: #7B2B12;">' + getIconSVG('deployment', 32) + '</span></div>' +
+                        '<div class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">AWS</div>' +
                     '</button>' +
-                    '<button class="target-card p-6 border rounded-lg text-center bg-input-background border-border hover:border-focus-border cursor-pointer transition-all">' +
-                        '<div class="mb-2"><span class="icon icon-deployment text-3xl" style="color: var(--link);"></span></div>' +
-                        '<div class="font-semibold" style="color: var(--text-primary);">DigitalOcean</div>' +
+                    '<button class="target-card p-8 border rounded-lg text-center bg-input-background border-border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1" style="border-color: var(--border-subtle);">' +
+                        '<div class="mb-4"><span class="icon icon-xl" style="color: #7B2B12;">' + getIconSVG('deployment', 32) + '</span></div>' +
+                        '<div class="font-semibold text-lg" style="color: var(--text-primary); font-weight: 600;">DigitalOcean</div>' +
                     '</button>' +
                 '</div>' +
-                '<div class="flex gap-2">' +
-                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-back"></span> Back' +
+                '<div class="flex gap-3">' +
+                    '<button data-action="dashboard" class="back-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('back', 16) + ' Back' +
                     '</button>' +
-                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded cursor-pointer hover:bg-button-background hover:text-button-foreground flex items-center gap-1.5">' +
-                        '<span class="icon icon-logout"></span> Logout' +
+                    '<button onclick="window.logout()" class="logout-btn px-4 py-2 bg-input-background border border-border rounded-md cursor-pointer transition-all hover:bg-button-background hover:text-button-foreground flex items-center gap-2" style="font-weight: 500;">' +
+                        getIconSVG('logout', 16) + ' Logout' +
                     '</button>' +
                 '</div>' +
             '</div>';
@@ -1382,32 +1805,46 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             --error-bg: var(--vscode-inputValidation-errorBackground);
             --link: var(--vscode-textLink-foreground);
             
-            /* Mode-specific colors */
-            --mode-chat-accent: #0E639C;
-            --mode-code-accent: #D67E00;
-            --mode-research-accent: #811F3F;
-            --mode-settings-accent: #6A8759;
-            
             /* Neutral colors for better visibility */
             --text-primary: var(--vscode-foreground);
             --text-secondary: var(--vscode-descriptionForeground);
             --surface: var(--vscode-editor-background);
             --surface-elevated: var(--vscode-list-hoverBackground);
             --border-subtle: var(--vscode-widget-border);
+            
+            /* Base mode color (default) */
+            --color-primary: #1C81D2;
+            --color-primary-hover: #1565A0;
+            --color-primary-light: rgba(28, 129, 210, 0.1);
         }
         
-        /* Mode-specific themes */
+        /* Mode-specific theme colors - Following redesign spec */
         body[data-mode="chat"] {
-            --mode-accent: var(--mode-chat-accent);
+            --color-primary: #1C81D2; /* Curious Blue */
+            --color-primary-hover: #1565A0;
+            --color-primary-light: rgba(28, 129, 210, 0.1);
         }
-        body[data-mode="code"] {
-            --mode-accent: var(--mode-code-accent);
-        }
+        body[data-mode="documentation"],
         body[data-mode="research"] {
-            --mode-accent: var(--mode-research-accent);
+            --color-primary: #5C5470; /* Husk */
+            --color-primary-hover: #4A4359;
+            --color-primary-light: rgba(92, 84, 112, 0.1);
+        }
+        body[data-mode="bugfix"],
+        body[data-mode="code"] {
+            --color-primary: #6B8E23; /* Timber */
+            --color-primary-hover: #5A7A1D;
+            --color-primary-light: rgba(107, 142, 35, 0.1);
+        }
+        body[data-mode="deployment"] {
+            --color-primary: #7B2B12; /* Mulled Wine */
+            --color-primary-hover: #6A240F;
+            --color-primary-light: rgba(123, 43, 18, 0.1);
         }
         body[data-mode="settings"] {
-            --mode-accent: var(--mode-settings-accent);
+            --color-primary: #5C5470; /* Husk for settings */
+            --color-primary-hover: #4A4359;
+            --color-primary-light: rgba(92, 84, 112, 0.1);
         }
 
         html, body {
@@ -1424,35 +1861,33 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             color: var(--text-primary);
         }
         
-        /* Professional icon system using Unicode and symbols */
+        /* SVG Icon System - Professional, minimal icons aligned with VS Code style */
         .icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 1em;
-            line-height: 1;
-            width: 1em;
-            height: 1em;
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
         }
         
-        /* Clean icon characters - professional look without emojis */
-        .icon-chat::before { content: '●'; font-weight: 400; font-size: 0.85em; }
-        .icon-code::before { content: '</>'; font-weight: 600; letter-spacing: -0.05em; font-family: 'Consolas', 'Monaco', monospace; }
-        .icon-research::before { content: '○'; font-weight: 300; font-size: 1.1em; }
-        .icon-deployment::before { content: '▲'; font-weight: 600; font-size: 0.9em; }
-        .icon-settings::before { content: '⚙'; font-size: 0.9em; font-weight: 400; }
-        .icon-logout::before { content: '→'; transform: rotate(180deg); display: inline-block; font-weight: 600; }
-        .icon-back::before { content: '←'; font-weight: 600; }
-        .icon-bug::before { content: '●'; font-size: 0.75em; }
-        .icon-refactor::before { content: '⟲'; font-weight: 600; }
-        .icon-test::before { content: '✓'; font-weight: 600; }
-        
-        /* Alternative: Use clean text icons */
-        .icon-text {
-            font-family: var(--vscode-font-family);
-            font-size: 1em;
-            font-weight: 600;
+        .icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+            stroke: currentColor;
         }
+        
+        /* Icon colors use mode primary color */
+        .icon-primary {
+            color: var(--color-primary);
+        }
+        
+        /* Icon sizes */
+        .icon-sm { width: 14px; height: 14px; }
+        .icon-md { width: 16px; height: 16px; }
+        .icon-lg { width: 20px; height: 20px; }
+        .icon-xl { width: 24px; height: 24px; }
 
         #root {
             height: 100%;
@@ -1467,16 +1902,52 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             width: 100%;
         }
         
+        /* Smooth transitions for all interactive elements */
+        * {
+            transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.2s ease, opacity 0.15s ease;
+        }
+        
         .action-card {
             min-height: 120px;
             display: flex;
             flex-direction: column;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .action-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+        
+        .target-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .target-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+        
+        button {
+            transition: all 0.15s ease;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        input, select, textarea {
+            transition: all 0.15s ease;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px var(--color-primary-light);
         }
         
         .max-w-\\[80\\%\\] {
@@ -1614,6 +2085,167 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         }
         ::-webkit-scrollbar-thumb:hover {
             background: var(--scrollbar-hover);
+        }
+
+        /* Formatted Content Styles */
+        
+        /* File paths */
+        .formatted-filepath {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            text-decoration: underline;
+            font-family: var(--vscode-editor-font-family);
+            border-radius: 2px;
+            padding: 1px 2px;
+            transition: all 0.15s ease;
+        }
+        .formatted-filepath:hover {
+            color: var(--vscode-textLink-activeForeground);
+            background: var(--vscode-textLink-foreground);
+            background-opacity: 0.1;
+        }
+        .formatted-filepath-no-click {
+            color: var(--vscode-textLink-foreground);
+            font-family: var(--vscode-editor-font-family);
+        }
+
+        /* Links */
+        .formatted-link {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            text-decoration: underline;
+            transition: color 0.15s ease;
+        }
+        .formatted-link:hover {
+            color: var(--vscode-textLink-activeForeground);
+        }
+        .formatted-link-no-click {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
+        }
+
+        /* Emails */
+        .formatted-email {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            text-decoration: underline;
+            transition: color 0.15s ease;
+        }
+        .formatted-email:hover {
+            color: var(--vscode-textLink-activeForeground);
+        }
+        .formatted-email-no-click {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
+        }
+
+        /* Code blocks */
+        .formatted-code-block {
+            background: var(--vscode-textCodeBlock-background, var(--input-bg));
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            font-size: var(--vscode-editor-font-size, 0.9em);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .formatted-code-block code {
+            background: transparent;
+            padding: 0;
+            border: none;
+            font-family: inherit;
+            font-size: inherit;
+        }
+
+        /* Inline code */
+        .formatted-inline-code {
+            background: var(--vscode-textCodeBlock-background, var(--input-bg));
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            font-size: 0.9em;
+            border: 1px solid var(--input-border);
+        }
+
+        /* Error messages */
+        .formatted-error {
+            color: var(--vscode-errorForeground);
+            background: var(--vscode-inputValidation-errorBackground);
+            border-left: 3px solid var(--vscode-errorForeground);
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        /* Stack traces */
+        .formatted-stack-trace {
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            font-size: 0.875rem;
+            color: var(--vscode-descriptionForeground);
+            background: var(--vscode-textCodeBlock-background, var(--input-bg));
+            padding: 8px 12px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            border: 1px solid var(--input-border);
+            margin: 8px 0;
+        }
+
+        /* Git hashes */
+        .formatted-git-hash {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            background: var(--vscode-textCodeBlock-background, var(--input-bg));
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid var(--input-border);
+            transition: all 0.15s ease;
+        }
+        .formatted-git-hash:hover {
+            color: var(--vscode-textLink-activeForeground);
+            background: var(--vscode-list-hoverBackground);
+        }
+        .formatted-git-hash-no-click {
+            color: var(--vscode-textLink-foreground);
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            background: var(--vscode-textCodeBlock-background, var(--input-bg));
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        /* Line numbers */
+        .formatted-line-number {
+            color: var(--vscode-descriptionForeground);
+            font-weight: 600;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+        }
+
+        /* Syntax highlighting classes */
+        .syntax-keyword {
+            color: var(--vscode-textPreformat-foreground, var(--vscode-keybindingLabel-foreground));
+            font-weight: 600;
+        }
+        .syntax-string {
+            color: var(--vscode-symbolIcon-stringForeground, var(--vscode-textLink-foreground));
+        }
+        .syntax-comment {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            opacity: 0.7;
+        }
+        .syntax-number {
+            color: var(--vscode-symbolIcon-numberForeground, var(--vscode-textLink-foreground));
+        }
+        .syntax-function {
+            color: var(--vscode-symbolIcon-functionForeground, var(--vscode-textLink-foreground));
+        }
+        .syntax-property {
+            color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-textLink-foreground));
         }
 
         /* Layout */
