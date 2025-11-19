@@ -28,85 +28,245 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ) {
+    Logger.info('MainViewProvider', 'Resolving webview view', {
+      viewType: MainViewProvider.viewType,
+    })
+    
     this._view = webviewView
 
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this._context.extensionUri],
     }
+    Logger.debug('MainViewProvider', 'Webview options configured')
 
     // Check if API key is configured
+    Logger.debug('MainViewProvider', 'Checking API key configuration')
     const hasApiKey = await this._checkApiKeyConfigured()
+    Logger.info('MainViewProvider', 'API key check completed', { hasApiKey })
 
     // Get workspace path
     const workspaceFolders = vscode.workspace.workspaceFolders
     const workspacePath = workspaceFolders && workspaceFolders.length > 0
       ? workspaceFolders[0].uri.fsPath
       : ''
+    Logger.debug('MainViewProvider', 'Workspace path resolved', {
+      workspacePath: workspacePath || '(none)',
+      hasWorkspace: !!workspacePath,
+    })
 
+    Logger.debug('MainViewProvider', 'Generating webview HTML content')
     webviewView.webview.html = this._getWebviewContent(webviewView.webview, hasApiKey, workspacePath)
+    Logger.info('MainViewProvider', 'Webview HTML content set', {
+      hasApiKey,
+      contentLength: webviewView.webview.html.length,
+    })
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(async (message) => {
+      Logger.debug('MainViewProvider', 'Received message from webview', {
+        command: message.command,
+        hasProvider: !!message.provider,
+        hasText: !!message.text,
+        hasPage: !!message.page,
+      })
       await this._handleMessage(message)
     })
+    
+    Logger.info('MainViewProvider', 'Webview view resolved successfully')
   }
 
   private async _checkApiKeyConfigured(): Promise<boolean> {
-    if (!this._configService) return false
+    if (!this._configService) {
+      Logger.warn('MainViewProvider', 'ConfigService not available for API key check')
+      return false
+    }
+    
     try {
+      // First, try to get the LLM config
       const config = await this._configService.getLLMConfig()
-      return !!(config.apiKey || config.provider === 'ollama')
-    } catch {
+      
+      // Check if API key exists in config
+      if (config.apiKey && config.apiKey.trim().length > 0) {
+        Logger.debug('MainViewProvider', 'API key found in config', {
+          provider: config.provider,
+          keyLength: config.apiKey.length,
+        })
+        return true
+      }
+      
+      // For Ollama, no API key is needed
+      if (config.provider === 'ollama') {
+        Logger.debug('MainViewProvider', 'Ollama provider detected, no API key needed')
+        return true
+      }
+      
+      // Fallback: Check secrets directly for any configured provider
+      Logger.debug('MainViewProvider', 'API key not in config, checking secrets directly', {
+        provider: config.provider,
+      })
+      
+      // Check for the configured provider's API key
+      const directApiKey = await this._configService.getApiKey(config.provider)
+      if (directApiKey && directApiKey.trim().length > 0) {
+        Logger.info('MainViewProvider', 'API key found in secrets (fallback check)', {
+          provider: config.provider,
+          keyLength: directApiKey.length,
+        })
+        return true
+      }
+      
+      // Check for any provider that might have an API key
+      const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'custom']
+      for (const provider of providers) {
+        const key = await this._configService.getApiKey(provider)
+        if (key && key.trim().length > 0) {
+          Logger.info('MainViewProvider', `Found API key for alternative provider: ${provider}`, {
+            keyLength: key.length,
+          })
+          // Update the provider setting to use this one
+          const workspaceConfig = vscode.workspace.getConfiguration('scriptly')
+          await workspaceConfig.update('llmProvider', provider, vscode.ConfigurationTarget.Global)
+          return true
+        }
+      }
+      
+      Logger.debug('MainViewProvider', 'No API key found for any provider')
+      return false
+    } catch (error) {
+      Logger.error('MainViewProvider', 'Error checking API key configuration', error)
       return false
     }
   }
 
   private async _handleMessage(message: any) {
-    if (!this._view) return
+    if (!this._view) {
+      Logger.warn('MainViewProvider', 'Received message but webview is not available', {
+        command: message.command,
+      })
+      return
+    }
+
+    Logger.debug('MainViewProvider', 'Handling message', {
+      command: message.command,
+      messageKeys: Object.keys(message),
+    })
 
     switch (message.command) {
       case 'ready':
+        Logger.info('MainViewProvider', 'Webview ready message received')
         // Webview is ready
         const hasApiKey = await this._checkApiKeyConfigured()
+        Logger.info('MainViewProvider', 'Sending auth state to webview', { hasApiKey })
         this._view.webview.postMessage({
           command: 'setAuth',
           isAuthenticated: hasApiKey,
         })
         break
 
+      case 'error':
+        // Log error from webview
+        Logger.error('MainViewProvider', 'Error from webview', {
+          error: message.error,
+          stack: message.stack,
+        })
+        break
+
+      case 'clearStorage':
+        // Clear all storage and reset
+        try {
+          Logger.info('MainViewProvider', 'Clearing storage as requested by user')
+          
+          // Clear all API keys from secrets
+          const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'ollama', 'custom']
+          for (const provider of providers) {
+            const keyName = `scriptly.apiKey.${provider}`
+            await this._context.secrets.delete(keyName)
+            Logger.debug('MainViewProvider', `Cleared API key for ${provider}`)
+          }
+          
+          // Reset configuration
+          const config = vscode.workspace.getConfiguration('scriptly')
+          await config.update('llmProvider', 'openai', vscode.ConfigurationTarget.Global)
+          
+          // Refresh the webview
+          const hasApiKeyAfterClear = await this._checkApiKeyConfigured()
+          const workspaceFolders = vscode.workspace.workspaceFolders
+          const workspacePath = workspaceFolders && workspaceFolders.length > 0
+            ? workspaceFolders[0].uri.fsPath
+            : ''
+          
+          this._view.webview.html = this._getWebviewContent(this._view.webview, hasApiKeyAfterClear, workspacePath)
+          
+          vscode.window.showInformationMessage('Scriptly: Storage cleared successfully. Please configure your API key again.')
+        } catch (error) {
+          Logger.error('MainViewProvider', 'Failed to clear storage', error)
+          vscode.window.showErrorMessage(`Failed to clear storage: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+        break
+
+      case 'reloadExtension':
+        // Reload the extension
+        Logger.info('MainViewProvider', 'Reloading extension as requested by user')
+        vscode.commands.executeCommand('workbench.action.reloadWindow')
+        break
+
       case 'configureAPI':
+        Logger.info('MainViewProvider', 'Configuring API key', {
+          provider: message.provider,
+          apiKeyLength: message.apiKey?.length || 0,
+        })
         if (this._configService) {
           try {
+            Logger.debug('MainViewProvider', 'Setting API key')
             await this._configService.setApiKey(message.provider, message.apiKey)
+            Logger.debug('MainViewProvider', 'Validating API key')
             const valid = await this._configService.validateApiKey(
               message.provider
             )
+            Logger.info('MainViewProvider', 'API key validation result', { valid })
             this._view.webview.postMessage({
               command: 'apiKeyConfigured',
               success: valid,
             })
             if (valid) {
+              Logger.info('MainViewProvider', 'API key valid, sending auth update')
               this._view.webview.postMessage({
                 command: 'setAuth',
                 isAuthenticated: true,
               })
             }
           } catch (error) {
+            Logger.error('MainViewProvider', 'Failed to configure API key', error)
             this._view.webview.postMessage({
               command: 'apiKeyConfigured',
               success: false,
               error: error instanceof Error ? error.message : 'Unknown error',
             })
           }
+        } else {
+          Logger.error('MainViewProvider', 'ConfigService not available for API configuration')
         }
         break
 
       case 'sendMessage':
+        Logger.info('MainViewProvider', 'Sending chat message', {
+          messageLength: message.text?.length || 0,
+          provider: message.provider,
+          conversationId: message.conversationId,
+        })
         if (this._llmService && this._configService) {
           try {
+            Logger.debug('MainViewProvider', 'Getting LLM config')
             const config = await this._configService.getLLMConfig()
+            Logger.debug('MainViewProvider', 'LLM config retrieved', {
+              provider: config.provider,
+              hasApiKey: !!config.apiKey,
+              modelName: config.modelName,
+            })
+            
             if (!config.apiKey && config.provider !== 'ollama') {
+              Logger.warn('MainViewProvider', 'API key not configured for chat')
               this._view.webview.postMessage({
                 command: 'error',
                 error: 'API key not configured',
@@ -116,16 +276,26 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
 
             // Switch provider if requested
             if (message.provider && message.provider !== config.provider) {
+              Logger.info('MainViewProvider', 'Switching provider', {
+                from: config.provider,
+                to: message.provider,
+              })
               await vscode.workspace
                 .getConfiguration('scriptly')
                 .update('llmProvider', message.provider, vscode.ConfigurationTarget.Workspace)
               // Invalidate model to force reload with new provider
               if (this._llmService) {
                 this._llmService.invalidateModel()
+                Logger.debug('MainViewProvider', 'Model invalidated for provider switch')
               }
               // Get fresh config with new provider
               const newConfig = await this._configService.getLLMConfig()
+              Logger.debug('MainViewProvider', 'New provider config retrieved', {
+                provider: newConfig.provider,
+                hasApiKey: !!newConfig.apiKey,
+              })
               if (!newConfig.apiKey && newConfig.provider !== 'ollama') {
+                Logger.warn('MainViewProvider', `API key not configured for ${newConfig.provider}`)
                 this._view.webview.postMessage({
                   command: 'error',
                   error: `API key not configured for ${newConfig.provider}`,
@@ -139,7 +309,15 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             let codebaseContext = ''
 
             if (workspaceFolders && workspaceFolders.length > 0) {
+              Logger.debug('MainViewProvider', 'Getting codebase context', {
+                workspacePath: workspaceFolders[0].uri.fsPath,
+              })
               codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+              Logger.debug('MainViewProvider', 'Codebase context retrieved', {
+                contextLength: codebaseContext.length,
+              })
+            } else {
+              Logger.debug('MainViewProvider', 'No workspace folder found, skipping codebase context')
             }
 
             const request: ChatRequest = {
@@ -148,48 +326,76 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
               selectedCode: '',
               conversationId: message.conversationId || 'default',
             }
+            Logger.debug('MainViewProvider', 'Chat request prepared', {
+              messageLength: request.message.length,
+              contextLength: request.fileContext.length,
+              conversationId: request.conversationId,
+            })
 
             // Stream response
+            Logger.info('MainViewProvider', 'Starting chat response stream')
+            let chunkCount = 0
             for await (const chunk of this._llmService.streamChatResponse(request)) {
+              chunkCount++
               this._view.webview.postMessage({
                 command: 'streamChunk',
                 chunk,
               })
             }
+            Logger.info('MainViewProvider', 'Chat response stream completed', { chunkCount })
 
             this._view.webview.postMessage({
               command: 'streamComplete',
             })
           } catch (error) {
+            Logger.error('MainViewProvider', 'Error sending chat message', error)
             this._view.webview.postMessage({
               command: 'error',
               error: error instanceof Error ? error.message : 'Unknown error',
             })
           }
+        } else {
+          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for chat')
         }
         break
 
       case 'navigate':
+        Logger.info('MainViewProvider', 'Navigation requested', {
+          page: message.page,
+        })
         // Handle navigation requests - update webview
         if (this._view) {
           this._view.webview.postMessage({
             command: 'navigate',
             page: message.page,
           })
+          Logger.debug('MainViewProvider', 'Navigation message sent to webview')
+        } else {
+          Logger.warn('MainViewProvider', 'Cannot navigate: webview not available')
         }
         break
 
       case 'codeReview':
+        Logger.info('MainViewProvider', 'Code review requested', {
+          action: message.action,
+          file: message.file,
+        })
         // Handle code review requests
         if (this._llmService && this._configService) {
           try {
             const workspaceFolders = vscode.workspace.workspaceFolders
             let codebaseContext = ''
             if (workspaceFolders && workspaceFolders.length > 0) {
+              Logger.debug('MainViewProvider', 'Getting codebase context for code review')
               codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+              Logger.debug('MainViewProvider', 'Codebase context retrieved for review', {
+                contextLength: codebaseContext.length,
+              })
             }
             // Placeholder for code review functionality - results will be formatted in webview
+            Logger.debug('MainViewProvider', 'Scheduling code review results')
             setTimeout(() => {
+              Logger.debug('MainViewProvider', 'Sending code review results')
               this._view?.webview.postMessage({
                 command: 'reviewResults',
                 results: { 
@@ -205,20 +411,31 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
               results: { error: error instanceof Error ? error.message : 'Unknown error' },
             })
           }
+        } else {
+          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for code review')
         }
         break
 
       case 'research':
+        Logger.info('MainViewProvider', 'Research requested', {
+          query: message.query,
+        })
         // Handle research requests
         if (this._llmService && this._configService) {
           try {
             const workspaceFolders = vscode.workspace.workspaceFolders
             let codebaseContext = ''
             if (workspaceFolders && workspaceFolders.length > 0) {
+              Logger.debug('MainViewProvider', 'Getting codebase context for research')
               codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+              Logger.debug('MainViewProvider', 'Codebase context retrieved for research', {
+                contextLength: codebaseContext.length,
+              })
             }
             // Placeholder for research functionality - results will be formatted in webview
+            Logger.debug('MainViewProvider', 'Scheduling research results')
             setTimeout(() => {
+              Logger.debug('MainViewProvider', 'Sending research results')
               this._view?.webview.postMessage({
                 command: 'researchResults',
                 results: [{ 
@@ -235,34 +452,53 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
               results: [{ error: error instanceof Error ? error.message : 'Unknown error' }],
             })
           }
+        } else {
+          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for research')
         }
         break
 
       case 'openSettings':
+        Logger.info('MainViewProvider', 'Opening settings', {
+          section: message.section,
+        })
         // Open VS Code settings
         if (message.section === 'api') {
+          Logger.debug('MainViewProvider', 'Opening API configuration')
           vscode.commands.executeCommand('scriptly.configureAPI')
         }
         break
 
       case 'logout':
+        Logger.info('MainViewProvider', 'Logout requested')
         // Handle logout
         if (this._view) {
+          Logger.debug('MainViewProvider', 'Sending logout message to webview')
           this._view.webview.postMessage({
             command: 'logout',
           })
+        } else {
+          Logger.warn('MainViewProvider', 'Cannot logout: webview not available')
         }
         // Clear API keys from secrets (optional - user might want to keep them)
         // For now, just reset auth state
         break
 
       case 'openFile':
+        Logger.info('MainViewProvider', 'Opening file', {
+          filePath: message.filePath,
+          lineNumber: message.lineNumber,
+          column: message.column,
+          endLine: message.endLine,
+        })
         // Open file in VS Code editor at specified line and column
         try {
           const workspaceFolders = vscode.workspace.workspaceFolders
           const workspacePath = workspaceFolders && workspaceFolders.length > 0 
             ? workspaceFolders[0].uri.fsPath 
             : undefined
+          Logger.debug('MainViewProvider', 'Workspace path for file open', {
+            workspacePath: workspacePath || '(none)',
+          })
 
           await VSCodeActions.openFile(
             message.filePath,
@@ -271,6 +507,7 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             message.endLine,
             workspacePath
           )
+          Logger.info('MainViewProvider', 'File opened successfully')
         } catch (error) {
           Logger.error('MainViewProvider', 'Failed to open file', error)
           if (this._view) {
@@ -283,9 +520,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         break
 
       case 'openURL':
+        Logger.info('MainViewProvider', 'Opening URL', {
+          url: message.url,
+        })
         // Open URL in external browser
         try {
           await VSCodeActions.openURL(message.url)
+          Logger.info('MainViewProvider', 'URL opened successfully')
         } catch (error) {
           Logger.error('MainViewProvider', 'Failed to open URL', error)
           if (this._view) {
@@ -298,9 +539,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         break
 
       case 'openEmail':
+        Logger.info('MainViewProvider', 'Opening email', {
+          email: message.email,
+        })
         // Open email client with mailto link
         try {
           await VSCodeActions.openEmail(message.email)
+          Logger.info('MainViewProvider', 'Email client opened successfully')
         } catch (error) {
           Logger.error('MainViewProvider', 'Failed to open email', error)
           if (this._view) {
@@ -313,9 +558,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         break
 
       case 'showGitCommit':
+        Logger.info('MainViewProvider', 'Showing git commit', {
+          hash: message.hash,
+        })
         // Show git commit information
         try {
           await VSCodeActions.showGitCommit(message.hash)
+          Logger.info('MainViewProvider', 'Git commit shown successfully')
         } catch (error) {
           Logger.error('MainViewProvider', 'Failed to show git commit', error)
           if (this._view) {
@@ -328,11 +577,18 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         break
 
       default:
-        Logger.warn('MainViewProvider', 'Unknown message command', { command: message.command })
+        Logger.warn('MainViewProvider', 'Unknown message command received', {
+          command: message.command,
+          messageKeys: Object.keys(message),
+        })
+        break
     }
   }
 
   private async _getCodebaseContext(workspacePath: string): Promise<string> {
+    Logger.debug('MainViewProvider', 'Getting codebase context', {
+      workspacePath,
+    })
     try {
       const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.sql', '.vue', '.svelte']
       const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'out', '.next', '.vscode', 'coverage', '.turbo', 'logs', 'log']
@@ -345,6 +601,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
       const maxFiles = 20
       const maxCharsPerFile = 800
       const maxTotalChars = 15000
+
+      Logger.debug('MainViewProvider', 'Codebase context parameters', {
+        maxFiles,
+        maxCharsPerFile,
+        maxTotalChars,
+        maxFileSize,
+      })
 
       const getFilePriority = (fileName: string, filePath: string): number => {
         if (priorityFiles.includes(fileName)) return 10
@@ -360,6 +623,12 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         
         try {
           const entries = fs.readdirSync(dir, { withFileTypes: true })
+          Logger.debug('MainViewProvider', 'Walking directory', {
+            dir,
+            depth,
+            entriesCount: entries.length,
+            currentFilesCount: codeFiles.length,
+          })
           
           entries.sort((a, b) => {
             if (a.isDirectory() && !b.isDirectory()) return 1
@@ -370,7 +639,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
           })
           
           for (const entry of entries) {
-            if (codeFiles.length >= maxFiles) break
+            if (codeFiles.length >= maxFiles) {
+              Logger.debug('MainViewProvider', 'Reached max files limit', {
+                maxFiles,
+                currentCount: codeFiles.length,
+              })
+              break
+            }
             
             const fullPath = path.join(dir, entry.name)
             const relativePath = path.relative(workspacePath, fullPath)
@@ -397,40 +672,81 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                       name: entry.name,
                       priority,
                     })
+                    Logger.debug('MainViewProvider', 'Added file to context', {
+                      path: relativePath,
+                      priority,
+                      contentLength: content.substring(0, contentLimit).length,
+                      fileSize: stats.size,
+                    })
+                  } else {
+                    Logger.debug('MainViewProvider', 'Skipping file (too large)', {
+                      path: relativePath,
+                      size: stats.size,
+                      maxSize: maxFileSize,
+                    })
                   }
-                } catch {
-                  // Skip unreadable files
+                } catch (fileError) {
+                  Logger.debug('MainViewProvider', 'Skipping unreadable file', {
+                    path: relativePath,
+                    error: fileError instanceof Error ? fileError.message : String(fileError),
+                  })
                 }
               }
             }
           }
-        } catch {
-          // Skip inaccessible directories
+        } catch (dirError) {
+          Logger.debug('MainViewProvider', 'Skipping inaccessible directory', {
+            dir,
+            error: dirError instanceof Error ? dirError.message : String(dirError),
+          })
         }
       }
 
+      Logger.debug('MainViewProvider', 'Starting directory walk', { workspacePath })
       walkDir(workspacePath)
+      Logger.info('MainViewProvider', 'Directory walk completed', {
+        filesFound: codeFiles.length,
+      })
 
       if (codeFiles.length === 0) {
+        Logger.warn('MainViewProvider', 'No code files found in workspace')
         return ''
       }
 
       codeFiles.sort((a, b) => b.priority - a.priority)
+      Logger.debug('MainViewProvider', 'Files sorted by priority', {
+        topFiles: codeFiles.slice(0, 5).map(f => ({ path: f.path, priority: f.priority })),
+      })
 
       let context = `Project Codebase (${codeFiles.length} key files):\n\n`
       let totalChars = context.length
+      let filesIncluded = 0
 
       for (const file of codeFiles) {
         const fileContext = `[${file.path}]\n${file.content}\n\n`
         const fileContextLength = fileContext.length
         
         if (totalChars + fileContextLength > maxTotalChars) {
+          Logger.debug('MainViewProvider', 'Reached max total chars limit', {
+            totalChars,
+            maxTotalChars,
+            filesIncluded,
+            totalFiles: codeFiles.length,
+          })
           break
         }
         
         context += fileContext
         totalChars += fileContextLength
+        filesIncluded++
       }
+
+      Logger.info('MainViewProvider', 'Codebase context generated', {
+        totalFiles: codeFiles.length,
+        filesIncluded,
+        totalChars,
+        contextLength: context.length,
+      })
 
       return context
     } catch (error) {
@@ -452,9 +768,57 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
     <div id="root"></div>
+    <div id="error-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--vscode-editor-background); z-index: 10000; padding: 40px; overflow-y: auto;">
+        <div style="max-width: 600px; margin: 0 auto;">
+            <h2 style="color: var(--vscode-errorForeground); margin-bottom: 16px; font-size: 1.5rem;">Something Went Wrong</h2>
+            <p style="color: var(--vscode-foreground); margin-bottom: 24px; line-height: 1.6;">Scriptly encountered an error while loading. This might be due to corrupted storage or configuration issues.</p>
+            <div id="error-details" style="background: var(--vscode-input-background); padding: 16px; border-radius: 6px; margin-bottom: 24px; font-family: monospace; font-size: 0.875rem; color: var(--vscode-foreground); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"></div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button id="clear-storage-btn" style="padding: 10px 20px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Clear Storage & Retry</button>
+                <button id="reload-btn" style="padding: 10px 20px; background: var(--vscode-input-background); color: var(--vscode-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; cursor: pointer;">Reload Extension</button>
+            </div>
+        </div>
+    </div>
     <script>
         (function() {
+            let initializationStarted = false;
+            let initializationComplete = false;
+            const initStartTime = Date.now();
+            const INIT_TIMEOUT = 5000; // 5 seconds
+            
+            // Show error overlay function
+            function showError(message, details) {
+                const overlay = document.getElementById('error-overlay');
+                const detailsEl = document.getElementById('error-details');
+                if (overlay) {
+                    overlay.style.display = 'block';
+                    if (detailsEl && details) {
+                        detailsEl.textContent = details;
+                    }
+                }
+                const rootEl = document.getElementById('root');
+                if (rootEl) {
+                    rootEl.innerHTML = '<div style="padding: 20px; color: var(--vscode-errorForeground);"><h2>Error</h2><p>' + (message || 'Unknown error') + '</p></div>';
+                }
+            }
+            
+            // Check if initialization completed
+            function checkInitialization() {
+                if (!initializationComplete && Date.now() - initStartTime > INIT_TIMEOUT) {
+                    console.error('Initialization timeout - page did not render in time');
+                    showError('Initialization Timeout', 'The extension failed to initialize within 5 seconds. This might indicate a JavaScript error or missing dependencies.');
+                    return;
+                }
+                if (!initializationComplete) {
+                    setTimeout(checkInitialization, 500);
+                }
+            }
+            
+            // Start timeout check
+            setTimeout(checkInitialization, INIT_TIMEOUT);
+            
             try {
+                initializationStarted = true;
                 const vscode = acquireVsCodeApi();
                 window.vscode = vscode;
                 window.initialState = { isAuthenticated: ${hasApiKey} };
@@ -463,25 +827,69 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                 // Error handler
                 window.addEventListener('error', (e) => {
                     console.error('Script error:', e.error);
-                    const rootEl = document.getElementById('root');
-                    if (rootEl) {
-                        rootEl.innerHTML = '<div style="padding: 20px; color: var(--vscode-errorForeground);"><p>Error loading Scriptly</p><p style="font-size: 0.875rem; opacity: 0.7; margin-top: 8px;">' + (e.error?.message || 'Unknown error') + '</p></div>';
+                    const errorMsg = e.error?.message || e.message || 'Unknown error';
+                    const errorStack = e.error?.stack || '';
+                    showError('JavaScript Error', errorMsg + '\\n\\n' + errorStack);
+                    if (vscode && typeof vscode.postMessage === 'function') {
+                        vscode.postMessage({ command: 'error', error: errorMsg, stack: errorStack });
                     }
                 });
                 
                 window.addEventListener('unhandledrejection', (e) => {
                     console.error('Unhandled promise rejection:', e.reason);
+                    const errorMsg = e.reason?.message || String(e.reason) || 'Unhandled promise rejection';
+                    showError('Promise Rejection', errorMsg);
+                    if (vscode && typeof vscode.postMessage === 'function') {
+                        vscode.postMessage({ command: 'error', error: errorMsg });
+                    }
                 });
+                
+                // Immediately render a loading state
+                const rootEl = document.getElementById('root');
+                if (rootEl) {
+                    rootEl.innerHTML = '<div style="padding: 20px; color: var(--vscode-foreground);"><h2 style="margin-bottom: 12px;">Scriptly</h2><p style="opacity: 0.7;">Initializing...</p></div>';
+                    console.log('[Scriptly] Initial loading state rendered');
+                } else {
+                    console.error('[Scriptly] Root element not found during initial render');
+                }
                 
                 // Use fallback for now to ensure it works
                 try {
+                    console.log('[Scriptly] Starting fallback script execution');
                     ${this._getFallbackScript()}
+                    console.log('[Scriptly] Fallback script executed successfully');
+                    // Note: initializationComplete is set inside the fallback script after render
                 } catch (e) {
-                    console.error('Fallback script error:', e);
+                    console.error('[Scriptly] Fallback script error:', e);
+                    console.error('[Scriptly] Error stack:', e.stack);
                     const rootEl = document.getElementById('root');
                     if (rootEl) {
-                        rootEl.innerHTML = '<div style="padding: 20px;"><h2 style="margin-bottom: 12px;">Scriptly</h2><p style="opacity: 0.7;">Initializing...</p></div>';
+                        rootEl.innerHTML = '<div style="padding: 20px; color: var(--vscode-errorForeground);"><h2 style="margin-bottom: 12px;">Scriptly - Error</h2><p style="opacity: 0.7; margin-bottom: 8px;">Failed to initialize:</p><p style="font-size: 0.875rem; color: var(--vscode-errorForeground);">' + (e.message || 'Unknown error') + '</p><button onclick="location.reload()" style="margin-top: 12px; padding: 8px 16px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; cursor: pointer;">Reload</button></div>';
                     }
+                    showError('Initialization Error', e.message + '\\n\\nStack: ' + (e.stack || 'No stack trace'));
+                    if (vscode && typeof vscode.postMessage === 'function') {
+                        vscode.postMessage({ command: 'error', error: e.message, stack: e.stack });
+                    }
+                }
+                
+                // Setup clear storage button
+                const clearStorageBtn = document.getElementById('clear-storage-btn');
+                if (clearStorageBtn) {
+                    clearStorageBtn.addEventListener('click', function() {
+                        if (vscode && typeof vscode.postMessage === 'function') {
+                            vscode.postMessage({ command: 'clearStorage' });
+                        }
+                    });
+                }
+                
+                // Setup reload button
+                const reloadBtn = document.getElementById('reload-btn');
+                if (reloadBtn) {
+                    reloadBtn.addEventListener('click', function() {
+                        if (vscode && typeof vscode.postMessage === 'function') {
+                            vscode.postMessage({ command: 'reloadExtension' });
+                        }
+                    });
                 }
                 
                 // Try to load React in background for enhanced UI
@@ -524,15 +932,50 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     // Fallback vanilla JS version if React fails to load
     // Use string concatenation to avoid template literal nesting issues
     return `
+        console.log('[Scriptly] Starting fallback script initialization');
+        
         const root = document.getElementById('root');
+        if (!root) {
+            console.error('[Scriptly] Root element not found!');
+            document.body.innerHTML = '<div style="padding: 20px; color: var(--vscode-foreground);"><h2>Scriptly</h2><p>Error: Root element not found. Please reload the extension.</p></div>';
+            throw new Error('Root element not found');
+        }
+        console.log('[Scriptly] Root element found');
+        
+        // Ensure we have initial state
+        if (!window.initialState) {
+            window.initialState = { isAuthenticated: false };
+            console.log('[Scriptly] Initialized default state');
+        }
+        
         const hasApiKey = window.initialState?.isAuthenticated || false;
         let currentPage = hasApiKey ? 'dashboard' : 'login';
+        console.log('[Scriptly] Initial page determined:', currentPage, 'hasApiKey:', hasApiKey);
+        
+        // Notify extension that webview is ready
+        if (vscode && typeof vscode.postMessage === 'function') {
+            console.log('[Scriptly] Sending ready message to extension');
+            vscode.postMessage({ command: 'ready' });
+        } else {
+            console.warn('[Scriptly] vscode API not available');
+        }
         
         // Make functions globally accessible
         window.navigate = function(page) {
+            if (!page) {
+                console.error('Navigate called without page parameter');
+                return;
+            }
             currentPage = page;
-            renderPage();
-            vscode.postMessage({ command: 'navigate', page });
+            try {
+                renderPage();
+                if (vscode && typeof vscode.postMessage === 'function') {
+                    vscode.postMessage({ command: 'navigate', page });
+                }
+            } catch (e) {
+                console.error('Error in navigate:', e);
+                root.innerHTML = '<div style="padding: 20px; color: var(--vscode-errorForeground);"><p>Error navigating to ' + page + '</p><p style="font-size: 0.875rem;">' + e.message + '</p></div>';
+            }
         };
         
         window.sendMessage = function() {
@@ -1183,49 +1626,102 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         }
         
         function renderPage() {
-            if (currentPage === 'login') {
-                renderLogin();
-            } else if (currentPage === 'dashboard') {
-                renderDashboard();
-            } else if (currentPage === 'chat') {
-                renderChat();
-            } else if (currentPage === 'code-review') {
-                renderCodeReview();
-            } else if (currentPage === 'research') {
-                renderResearch();
-            } else if (currentPage === 'settings') {
-                renderSettings();
-            } else if (currentPage === 'deployment') {
-                renderDeployment();
-            } else {
-                root.innerHTML = '<div class="p-8"><h1 class="text-2xl font-bold mb-2">' + currentPage + '</h1><p class="text-sm opacity-70">Page coming soon</p><button data-action="dashboard" class="back-btn mt-4 px-4 py-2 bg-button-background text-button-foreground rounded cursor-pointer">← Back to Dashboard</button></div>';
-                root.querySelectorAll('.back-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        window.navigate('dashboard');
+            try {
+                if (!root) {
+                    console.error('Cannot render page: root element not found');
+                    return;
+                }
+                
+                if (currentPage === 'login') {
+                    renderLogin();
+                } else if (currentPage === 'dashboard') {
+                    renderDashboard();
+                } else if (currentPage === 'chat') {
+                    renderChat();
+                } else if (currentPage === 'code-review') {
+                    renderCodeReview();
+                } else if (currentPage === 'research') {
+                    renderResearch();
+                } else if (currentPage === 'settings') {
+                    renderSettings();
+                } else if (currentPage === 'deployment') {
+                    renderDeployment();
+                } else {
+                    root.innerHTML = '<div class="p-8"><h1 class="text-2xl font-bold mb-2" style="color: var(--text-primary);">' + (currentPage || 'Unknown') + '</h1><p class="text-sm" style="color: var(--text-secondary); opacity: 0.7;">Page coming soon</p><button data-action="dashboard" class="back-btn mt-4 px-4 py-2 bg-button-background text-button-foreground rounded cursor-pointer">← Back to Dashboard</button></div>';
+                    root.querySelectorAll('.back-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            window.navigate('dashboard');
+                        });
                     });
-                });
+                }
+            } catch (e) {
+                console.error('Error rendering page:', e);
+                initializationComplete = false;
+                if (root) {
+                    root.innerHTML = '<div style="padding: 20px; color: var(--vscode-errorForeground);"><h2>Error Rendering Page</h2><p style="font-size: 0.875rem; margin-top: 8px;">' + (e.message || 'Unknown error') + '</p><button onclick="window.navigate(\'dashboard\')" style="margin-top: 12px; padding: 8px 16px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; cursor: pointer;">Go to Dashboard</button></div>';
+                }
+                showError('Render Error', e.message + '\\n\\nStack: ' + (e.stack || 'No stack trace'));
             }
         }
         
-        
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.command === 'setAuth') {
-                window.initialState.isAuthenticated = message.isAuthenticated;
-                currentPage = message.isAuthenticated ? 'dashboard' : 'login';
-                renderPage();
-            } else if (message.command === 'navigate') {
-                currentPage = message.page || 'dashboard';
-                renderPage();
-            } else if (message.command === 'logout') {
-                window.initialState.isAuthenticated = false;
-                currentPage = 'login';
-                renderPage();
-            }
+        // Render the initial page immediately
+        console.log('[Scriptly] About to call renderPage(), currentPage:', currentPage);
+        console.log('[Scriptly] Functions available:', {
+            renderPage: typeof renderPage,
+            renderLogin: typeof renderLogin,
+            renderDashboard: typeof renderDashboard,
+            getIconSVG: typeof getIconSVG,
         });
         
-        vscode.postMessage({ command: 'ready' });
-        renderPage();
+        try {
+            if (typeof renderPage !== 'function') {
+                throw new Error('renderPage function is not defined');
+            }
+            console.log('[Scriptly] Calling renderPage()');
+            renderPage();
+            console.log('[Scriptly] renderPage() called successfully');
+            
+            // Verify something was rendered
+            setTimeout(function() {
+                const rootContent = root.innerHTML.trim();
+                console.log('[Scriptly] Root content after render:', rootContent.substring(0, 100) + '...');
+                if (!rootContent || rootContent.length < 50) {
+                    console.error('[Scriptly] Root is empty or too short after render!');
+                    showError('Render Failed', 'The page did not render properly. Root content length: ' + rootContent.length);
+                } else {
+                    initializationComplete = true;
+                    console.log('[Scriptly] Initial render completed successfully');
+                }
+            }, 100);
+        } catch (e) {
+            console.error('[Scriptly] Error in initial render:', e);
+            console.error('[Scriptly] Error stack:', e.stack);
+            initializationComplete = false;
+            showError('Initial Render Error', e.message + '\\n\\nStack: ' + (e.stack || 'No stack trace'));
+            if (vscode && typeof vscode.postMessage === 'function') {
+                vscode.postMessage({ command: 'error', error: e.message, stack: e.stack });
+            }
+        }
+        
+        window.addEventListener('message', (event) => {
+            try {
+                const message = event.data;
+                if (message.command === 'setAuth') {
+                    window.initialState.isAuthenticated = message.isAuthenticated;
+                    currentPage = message.isAuthenticated ? 'dashboard' : 'login';
+                    renderPage();
+                } else if (message.command === 'navigate') {
+                    currentPage = message.page || 'dashboard';
+                    renderPage();
+                } else if (message.command === 'logout') {
+                    window.initialState.isAuthenticated = false;
+                    currentPage = 'login';
+                    renderPage();
+                }
+            } catch (e) {
+                console.error('Error handling message:', e);
+            }
+        });
     `
   }
 
@@ -2350,10 +2846,22 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
   }
 
   public refresh() {
+    Logger.info('MainViewProvider', 'Refresh requested')
     if (this._view) {
+      Logger.debug('MainViewProvider', 'Refreshing webview content')
       this._checkApiKeyConfigured().then((hasApiKey) => {
-        this._view!.webview.html = this._getWebviewContent(this._view!.webview, hasApiKey)
+        Logger.debug('MainViewProvider', 'API key check completed for refresh', { hasApiKey })
+        const workspaceFolders = vscode.workspace.workspaceFolders
+        const workspacePath = workspaceFolders && workspaceFolders.length > 0
+          ? workspaceFolders[0].uri.fsPath
+          : ''
+        this._view!.webview.html = this._getWebviewContent(this._view!.webview, hasApiKey, workspacePath)
+        Logger.info('MainViewProvider', 'Webview refreshed successfully')
+      }).catch((error) => {
+        Logger.error('MainViewProvider', 'Failed to refresh webview', error)
       })
+    } else {
+      Logger.warn('MainViewProvider', 'Cannot refresh: webview not available')
     }
   }
 }

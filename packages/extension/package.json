@@ -4,6 +4,7 @@
   "description": "Free, unified IDE with AI-powered coding assistance",
   "version": "0.1.2",
   "publisher": "jeeva-dev",
+  "icon": "media/icon.png",
   "author": "Jeevanantham M <mjeevanantham04@gmail.com>",
   "license": "MIT",
   "repository": {
@@ -26,7 +27,7 @@
         {
           "id": "scriptly",
           "title": "Scriptly",
-          "icon": "$(robot)"
+          "icon": "media/icon.png"
         }
       ]
     },

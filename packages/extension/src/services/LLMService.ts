@@ -139,21 +139,39 @@ export class LLMService {
   async generateCompletion(
     request: CompletionRequest
   ): Promise<string> {
+    Logger.info('LLMService', 'Generating completion', {
+      language: request.language,
+      filename: request.filename,
+      codeLength: request.code.length,
+      cursorPosition: request.cursorPosition,
+    })
+    
     const cacheKey = this.getCacheKey(request.code, request.cursorPosition)
     if (this.cache.has(cacheKey)) {
+      Logger.debug('LLMService', 'Completion cache hit', { cacheKey })
       return this.cache.get(cacheKey)!
     }
 
+    Logger.debug('LLMService', 'Cache miss, generating new completion')
     const prompt = this.buildCompletionPrompt(request)
+    Logger.debug('LLMService', 'Completion prompt built', { promptLength: prompt.length })
+    
     const model = await this.getModel()
 
     try {
       // Use HumanMessage class from LangChain core
       const messages = [new HumanMessage(prompt)]
+      Logger.debug('LLMService', 'Invoking model for completion')
       const response = await model.invoke(messages)
 
       const suggestion = response.content as string
+      Logger.info('LLMService', 'Completion generated successfully', {
+        suggestionLength: suggestion.length,
+        preview: suggestion.substring(0, 50) + '...',
+      })
+      
       this.cache.set(cacheKey, suggestion)
+      Logger.debug('LLMService', 'Completion cached')
       return suggestion
     } catch (error) {
       Logger.error('LLMService', 'Completion generation failed', error)
@@ -164,19 +182,32 @@ export class LLMService {
   async *streamCompletion(
     request: CompletionRequest
   ): AsyncIterable<string> {
+    Logger.info('LLMService', 'Streaming completion', {
+      language: request.language,
+      filename: request.filename,
+      codeLength: request.code.length,
+    })
+    
     const prompt = this.buildCompletionPrompt(request)
+    Logger.debug('LLMService', 'Completion prompt built for streaming', { promptLength: prompt.length })
+    
     const model = await this.getModel()
 
     try {
       // Use HumanMessage class from LangChain core
       const messages = [new HumanMessage(prompt)]
+      Logger.debug('LLMService', 'Starting completion stream')
       const stream = await model.stream(messages)
 
+      let chunkCount = 0
       for await (const chunk of stream) {
         if (chunk.content) {
+          chunkCount++
           yield chunk.content as string
         }
       }
+      
+      Logger.info('LLMService', 'Completion stream completed', { chunkCount })
     } catch (error) {
       Logger.error('LLMService', 'Streaming completion failed', error)
       throw error
@@ -207,29 +238,44 @@ export class LLMService {
   async *streamChatResponse(
     request: ChatRequest
   ): AsyncIterable<string> {
+    Logger.info('LLMService', 'Streaming chat response', {
+      messageLength: request.message.length,
+      hasFileContext: !!request.fileContext,
+      fileContextLength: request.fileContext?.length || 0,
+      hasSelectedCode: !!request.selectedCode,
+      selectedCodeLength: request.selectedCode?.length || 0,
+      conversationId: request.conversationId,
+    })
+    
     const prompt = this.buildChatPrompt(request)
+    Logger.debug('LLMService', 'Chat prompt built', {
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 200) + '...',
+    })
+    
     const model = await this.getModel()
 
     try {
-      Logger.debug('LLMService', 'Streaming chat response', {
-        promptLength: prompt.length,
-        promptPreview: prompt.substring(0, 100) + '...',
-      })
-
       // Use HumanMessage class from LangChain core
       const messages = [new HumanMessage(prompt)]
-      
-      Logger.debug('LLMService', 'Created HumanMessage, starting stream')
+      Logger.debug('LLMService', 'Starting chat response stream')
       const stream = await model.stream(messages)
 
-      Logger.debug('LLMService', 'Stream started, iterating chunks')
+      let chunkCount = 0
+      let totalContentLength = 0
       for await (const chunk of stream) {
         if (chunk.content) {
-          yield chunk.content as string
+          chunkCount++
+          const content = chunk.content as string
+          totalContentLength += content.length
+          yield content
         }
       }
       
-      Logger.debug('LLMService', 'Stream completed successfully')
+      Logger.info('LLMService', 'Chat response stream completed', {
+        chunkCount,
+        totalContentLength,
+      })
     } catch (error) {
       Logger.error('LLMService', 'Streaming chat response failed', error)
       throw error
@@ -312,8 +358,13 @@ IMPORTANT:
 
   // Invalidate the current model (useful when API key changes)
   invalidateModel(): void {
+    Logger.info('LLMService', 'Invalidating model and cache', {
+      hadModel: !!this.currentModel,
+      cacheSize: this.cache.size,
+    })
     this.currentModel = null
     this.cache.clear()
+    Logger.debug('LLMService', 'Model and cache invalidated')
   }
 }
 

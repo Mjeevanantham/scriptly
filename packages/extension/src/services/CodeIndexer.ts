@@ -3,33 +3,56 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
 import { CodeChunk } from '../types'
+import { Logger } from '../utils/Logger'
 
 export class CodeIndexer {
   private chunks: Map<string, CodeChunk[]> = new Map()
   private fileHashes: Map<string, string> = new Map()
 
   async indexWorkspace(workspacePath: string): Promise<void> {
+    Logger.info('CodeIndexer', 'Starting workspace indexing', { workspacePath })
     const files = await this.getAllCodeFiles(workspacePath)
+    Logger.info('CodeIndexer', 'Found code files to index', { fileCount: files.length })
+    
     for (const file of files) {
       await this.indexFile(file)
     }
+    
+    Logger.info('CodeIndexer', 'Workspace indexing completed', {
+      totalFiles: files.length,
+      indexedFiles: this.chunks.size,
+    })
   }
 
   async indexFile(filePath: string): Promise<void> {
+    Logger.debug('CodeIndexer', 'Indexing file', { filePath })
     try {
       const content = fs.readFileSync(filePath, 'utf8')
       const hash = this.computeHash(content)
 
       // Skip if file hasn't changed
-      if (this.fileHashes.get(filePath) === hash) {
+      const existingHash = this.fileHashes.get(filePath)
+      if (existingHash === hash) {
+        Logger.debug('CodeIndexer', 'File unchanged, skipping', { filePath })
         return
       }
+
+      Logger.debug('CodeIndexer', 'File changed or new, indexing', {
+        filePath,
+        contentLength: content.length,
+        hadPreviousHash: !!existingHash,
+      })
 
       this.fileHashes.set(filePath, hash)
       const chunks = this.chunkFile(filePath, content)
       this.chunks.set(filePath, chunks)
+      
+      Logger.debug('CodeIndexer', 'File indexed successfully', {
+        filePath,
+        chunkCount: chunks.length,
+      })
     } catch (error) {
-      console.error(`Failed to index file ${filePath}:`, error)
+      Logger.error('CodeIndexer', `Failed to index file ${filePath}`, error)
     }
   }
 
@@ -38,8 +61,14 @@ export class CodeIndexer {
     lineNumber: number,
     contextLines: number = 10
   ): CodeChunk[] {
+    Logger.debug('CodeIndexer', 'Getting context by file', {
+      filePath,
+      lineNumber,
+      contextLines,
+    })
+    
     const chunks = this.chunks.get(filePath) || []
-    return chunks.filter((chunk) => {
+    const filtered = chunks.filter((chunk) => {
       const start = chunk.startLine
       const end = start + chunk.content.split('\n').length
       return (
@@ -47,13 +76,27 @@ export class CodeIndexer {
         lineNumber <= end + contextLines
       )
     })
+    
+    Logger.debug('CodeIndexer', 'Context chunks retrieved', {
+      filePath,
+      totalChunks: chunks.length,
+      filteredChunks: filtered.length,
+    })
+    
+    return filtered
   }
 
   searchByContent(query: string): CodeChunk[] {
+    Logger.info('CodeIndexer', 'Searching by content', {
+      query,
+      queryLength: query.length,
+      indexedFiles: this.chunks.size,
+    })
+    
     const results: CodeChunk[] = []
     const lowerQuery = query.toLowerCase()
 
-    for (const chunks of this.chunks.values()) {
+    for (const [filePath, chunks] of this.chunks.entries()) {
       for (const chunk of chunks) {
         if (chunk.content.toLowerCase().includes(lowerQuery)) {
           results.push(chunk)
@@ -61,16 +104,28 @@ export class CodeIndexer {
       }
     }
 
-    return results.slice(0, 10) // Return top 10 matches
+    const topResults = results.slice(0, 10) // Return top 10 matches
+    Logger.info('CodeIndexer', 'Search completed', {
+      totalMatches: results.length,
+      returnedResults: topResults.length,
+    })
+    
+    return topResults
   }
 
   onFileChanged(filePath: string): void {
+    Logger.debug('CodeIndexer', 'File changed event received', { filePath })
     this.indexFile(filePath)
   }
 
   invalidateCache(): void {
+    Logger.info('CodeIndexer', 'Invalidating cache', {
+      filesInCache: this.chunks.size,
+      hashesInCache: this.fileHashes.size,
+    })
     this.chunks.clear()
     this.fileHashes.clear()
+    Logger.debug('CodeIndexer', 'Cache invalidated')
   }
 
   private async getAllCodeFiles(
