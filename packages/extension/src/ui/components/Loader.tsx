@@ -1,4 +1,5 @@
 import React from 'react'
+import { Spinner } from './ui/Spinner'
 import type { LoaderState } from '../../types/ui'
 
 interface LoaderProps {
@@ -7,54 +8,40 @@ interface LoaderProps {
   className?: string
 }
 
-export const Loader: React.FC<LoaderProps> = ({
-  state,
-  size = 'medium',
-  className = '',
-}) => {
+export const Loader: React.FC<LoaderProps> = ({ state, size = 'medium', className = '' }) => {
   if (!state.isLoading) return null
 
-  const sizeClasses = {
-    small: 'w-4 h-4',
-    medium: 'w-8 h-8',
-    large: 'w-12 h-12',
+  const sizeMap = {
+    small: 'sm',
+    medium: 'md',
+    large: 'lg',
   }
 
-  const spinnerSize = sizeClasses[size]
-
   return (
-    <div
-      className={`loader-container flex flex-col items-center justify-center ${className}`}
-    >
+    <div className={`loader-container flex flex-col items-center justify-center ${className}`}>
       {state.type === 'spinner' || !state.type ? (
-        <div className={`spinner ${spinnerSize}`}>
-          <div className="spinner-inner"></div>
-        </div>
+        <Spinner size={sizeMap[size]} />
       ) : state.type === 'progress' && state.progress !== undefined ? (
         <div className="progress-container w-full max-w-xs">
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${state.progress}%` }}
-            ></div>
+            <div className="progress-fill" style={{ width: `${state.progress}%` }}></div>
           </div>
           {state.progress < 100 && (
             <div className="progress-text">{Math.round(state.progress)}%</div>
           )}
         </div>
       ) : (
-        <div className={`pulse ${spinnerSize}`}>
+        <div className="pulse flex gap-1">
           <div className="pulse-dot"></div>
           <div className="pulse-dot"></div>
           <div className="pulse-dot"></div>
         </div>
       )}
       {state.message && (
-        <div className="loader-message mt-4 text-center text-sm opacity-70">
+        <div className="loader-message mt-4 text-center text-sm text-muted-foreground">
           {state.message}
         </div>
       )}
     </div>
   )
 }
-
