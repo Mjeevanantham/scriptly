@@ -8,758 +8,759 @@ import { VSCodeActions } from '../utils/VSCodeActions'
 import { ChatRequest } from '../types'
 
 export class MainViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'scriptly.chatView'
+    public static readonly viewType = 'scriptly.chatView'
 
-  private _view?: vscode.WebviewView
-  private _llmService?: LLMService
-  private _configService?: ConfigService
+    private _view?: vscode.WebviewView
+    private _llmService?: LLMService
+    private _configService?: ConfigService
 
-  constructor(
-    private readonly _context: vscode.ExtensionContext,
-    configService: ConfigService,
-    llmService: LLMService
-  ) {
-    this._configService = configService
-    this._llmService = llmService
-  }
-
-  public async resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken
-  ) {
-    Logger.info('MainViewProvider', 'Resolving webview view', {
-      viewType: MainViewProvider.viewType,
-    })
-    
-    this._view = webviewView
-
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [this._context.extensionUri],
+    constructor(
+        private readonly _context: vscode.ExtensionContext,
+        configService: ConfigService,
+        llmService: LLMService
+    ) {
+        this._configService = configService
+        this._llmService = llmService
     }
-    Logger.debug('MainViewProvider', 'Webview options configured')
 
-    // Check if API key is configured
-    Logger.debug('MainViewProvider', 'Checking API key configuration')
-    const hasApiKey = await this._checkApiKeyConfigured()
-    Logger.info('MainViewProvider', 'API key check completed', { hasApiKey })
-
-    // Get workspace path
-    const workspaceFolders = vscode.workspace.workspaceFolders
-    const workspacePath = workspaceFolders && workspaceFolders.length > 0
-      ? workspaceFolders[0].uri.fsPath
-      : ''
-    Logger.debug('MainViewProvider', 'Workspace path resolved', {
-      workspacePath: workspacePath || '(none)',
-      hasWorkspace: !!workspacePath,
-    })
-
-    Logger.debug('MainViewProvider', 'Generating webview HTML content')
-    webviewView.webview.html = this._getWebviewContent(webviewView.webview, hasApiKey, workspacePath)
-    Logger.info('MainViewProvider', 'Webview HTML content set', {
-      hasApiKey,
-      contentLength: webviewView.webview.html.length,
-    })
-
-    // Handle messages from webview
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      Logger.debug('MainViewProvider', 'Received message from webview', {
-        command: message.command,
-        hasProvider: !!message.provider,
-        hasText: !!message.text,
-        hasPage: !!message.page,
-      })
-      await this._handleMessage(message)
-    })
-    
-    Logger.info('MainViewProvider', 'Webview view resolved successfully')
-  }
-
-  private async _checkApiKeyConfigured(): Promise<boolean> {
-    if (!this._configService) {
-      Logger.warn('MainViewProvider', 'ConfigService not available for API key check')
-      return false
-    }
-    
-    try {
-      // First, try to get the LLM config
-      const config = await this._configService.getLLMConfig()
-      
-      // Check if API key exists in config
-      if (config.apiKey && config.apiKey.trim().length > 0) {
-        Logger.debug('MainViewProvider', 'API key found in config', {
-          provider: config.provider,
-          keyLength: config.apiKey.length,
+    public async resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        _context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
+    ) {
+        Logger.info('MainViewProvider', 'Resolving webview view', {
+            viewType: MainViewProvider.viewType,
         })
-        return true
-      }
-      
-      // For Ollama, no API key is needed
-      if (config.provider === 'ollama') {
-        Logger.debug('MainViewProvider', 'Ollama provider detected, no API key needed')
-        return true
-      }
-      
-      // Fallback: Check secrets directly for any configured provider
-      Logger.debug('MainViewProvider', 'API key not in config, checking secrets directly', {
-        provider: config.provider,
-      })
-      
-      // Check for the configured provider's API key
-      const directApiKey = await this._configService.getApiKey(config.provider)
-      if (directApiKey && directApiKey.trim().length > 0) {
-        Logger.info('MainViewProvider', 'API key found in secrets (fallback check)', {
-          provider: config.provider,
-          keyLength: directApiKey.length,
-        })
-        return true
-      }
-      
-      // Check for any provider that might have an API key
-      const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'custom']
-      for (const provider of providers) {
-        const key = await this._configService.getApiKey(provider)
-        if (key && key.trim().length > 0) {
-          Logger.info('MainViewProvider', `Found API key for alternative provider: ${provider}`, {
-            keyLength: key.length,
-          })
-          // Update the provider setting to use this one
-          const workspaceConfig = vscode.workspace.getConfiguration('scriptly')
-          await workspaceConfig.update('llmProvider', provider, vscode.ConfigurationTarget.Global)
-          return true
+
+        this._view = webviewView
+
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [this._context.extensionUri],
         }
-      }
-      
-      Logger.debug('MainViewProvider', 'No API key found for any provider')
-      return false
-    } catch (error) {
-      Logger.error('MainViewProvider', 'Error checking API key configuration', error)
-      return false
-    }
-  }
+        Logger.debug('MainViewProvider', 'Webview options configured')
 
-  private async _handleMessage(message: any) {
-    if (!this._view) {
-      Logger.warn('MainViewProvider', 'Received message but webview is not available', {
-        command: message.command,
-      })
-      return
-    }
-
-    Logger.debug('MainViewProvider', 'Handling message', {
-      command: message.command,
-      messageKeys: Object.keys(message),
-    })
-
-    switch (message.command) {
-      case 'ready':
-        Logger.info('MainViewProvider', 'Webview ready message received')
-        // Webview is ready
+        // Check if API key is configured
+        Logger.debug('MainViewProvider', 'Checking API key configuration')
         const hasApiKey = await this._checkApiKeyConfigured()
-        Logger.info('MainViewProvider', 'Sending auth state to webview', { hasApiKey })
-        this._view.webview.postMessage({
-          command: 'setAuth',
-          isAuthenticated: hasApiKey,
-        })
-        break
+        Logger.info('MainViewProvider', 'API key check completed', { hasApiKey })
 
-      case 'error':
-        // Log error from webview
-        Logger.error('MainViewProvider', 'Error from webview', {
-          error: message.error,
-          stack: message.stack,
-        })
-        break
-
-      case 'clearStorage':
-        // Clear all storage and reset
-        try {
-          Logger.info('MainViewProvider', 'Clearing storage as requested by user')
-          
-          // Clear all API keys from secrets
-          const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'ollama', 'custom']
-          for (const provider of providers) {
-            const keyName = `scriptly.apiKey.${provider}`
-            await this._context.secrets.delete(keyName)
-            Logger.debug('MainViewProvider', `Cleared API key for ${provider}`)
-          }
-          
-          // Reset configuration
-          const config = vscode.workspace.getConfiguration('scriptly')
-          await config.update('llmProvider', 'openai', vscode.ConfigurationTarget.Global)
-          
-          // Refresh the webview
-          const hasApiKeyAfterClear = await this._checkApiKeyConfigured()
-          const workspaceFolders = vscode.workspace.workspaceFolders
-          const workspacePath = workspaceFolders && workspaceFolders.length > 0
+        // Get workspace path
+        const workspaceFolders = vscode.workspace.workspaceFolders
+        const workspacePath = workspaceFolders && workspaceFolders.length > 0
             ? workspaceFolders[0].uri.fsPath
             : ''
-          
-          this._view.webview.html = this._getWebviewContent(this._view.webview, hasApiKeyAfterClear, workspacePath)
-          
-          vscode.window.showInformationMessage('Scriptly: Storage cleared successfully. Please configure your API key again.')
-        } catch (error) {
-          Logger.error('MainViewProvider', 'Failed to clear storage', error)
-          vscode.window.showErrorMessage(`Failed to clear storage: ${error instanceof Error ? error.message : 'Unknown error'}`)
-        }
-        break
-
-      case 'reloadExtension':
-        // Reload the extension
-        Logger.info('MainViewProvider', 'Reloading extension as requested by user')
-        vscode.commands.executeCommand('workbench.action.reloadWindow')
-        break
-
-      case 'configureAPI':
-        Logger.info('MainViewProvider', 'Configuring API key', {
-          provider: message.provider,
-          apiKeyLength: message.apiKey?.length || 0,
-        })
-        if (this._configService) {
-          try {
-            Logger.debug('MainViewProvider', 'Setting API key')
-            await this._configService.setApiKey(message.provider, message.apiKey)
-            Logger.debug('MainViewProvider', 'Validating API key')
-            const valid = await this._configService.validateApiKey(
-              message.provider
-            )
-            Logger.info('MainViewProvider', 'API key validation result', { valid })
-            this._view.webview.postMessage({
-              command: 'apiKeyConfigured',
-              success: valid,
-            })
-            if (valid) {
-              Logger.info('MainViewProvider', 'API key valid, sending auth update')
-              this._view.webview.postMessage({
-                command: 'setAuth',
-                isAuthenticated: true,
-              })
-            }
-          } catch (error) {
-            Logger.error('MainViewProvider', 'Failed to configure API key', error)
-            this._view.webview.postMessage({
-              command: 'apiKeyConfigured',
-              success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            })
-          }
-        } else {
-          Logger.error('MainViewProvider', 'ConfigService not available for API configuration')
-        }
-        break
-
-      case 'sendMessage':
-        Logger.info('MainViewProvider', 'Sending chat message', {
-          messageLength: message.text?.length || 0,
-          provider: message.provider,
-          conversationId: message.conversationId,
-        })
-        if (this._llmService && this._configService) {
-          try {
-            Logger.debug('MainViewProvider', 'Getting LLM config')
-            const config = await this._configService.getLLMConfig()
-            Logger.debug('MainViewProvider', 'LLM config retrieved', {
-              provider: config.provider,
-              hasApiKey: !!config.apiKey,
-              modelName: config.modelName,
-            })
-            
-            if (!config.apiKey && config.provider !== 'ollama') {
-              Logger.warn('MainViewProvider', 'API key not configured for chat')
-              this._view.webview.postMessage({
-                command: 'error',
-                error: 'API key not configured',
-              })
-              return
-            }
-
-            // Switch provider if requested
-            if (message.provider && message.provider !== config.provider) {
-              Logger.info('MainViewProvider', 'Switching provider', {
-                from: config.provider,
-                to: message.provider,
-              })
-              await vscode.workspace
-                .getConfiguration('scriptly')
-                .update('llmProvider', message.provider, vscode.ConfigurationTarget.Workspace)
-              // Invalidate model to force reload with new provider
-              if (this._llmService) {
-                this._llmService.invalidateModel()
-                Logger.debug('MainViewProvider', 'Model invalidated for provider switch')
-              }
-              // Get fresh config with new provider
-              const newConfig = await this._configService.getLLMConfig()
-              Logger.debug('MainViewProvider', 'New provider config retrieved', {
-                provider: newConfig.provider,
-                hasApiKey: !!newConfig.apiKey,
-              })
-              if (!newConfig.apiKey && newConfig.provider !== 'ollama') {
-                Logger.warn('MainViewProvider', `API key not configured for ${newConfig.provider}`)
-                this._view.webview.postMessage({
-                  command: 'error',
-                  error: `API key not configured for ${newConfig.provider}`,
-                })
-                return
-              }
-            }
-
-            // Get workspace context
-            const workspaceFolders = vscode.workspace.workspaceFolders
-            let codebaseContext = ''
-
-            if (workspaceFolders && workspaceFolders.length > 0) {
-              Logger.debug('MainViewProvider', 'Getting codebase context', {
-                workspacePath: workspaceFolders[0].uri.fsPath,
-              })
-              codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
-              Logger.debug('MainViewProvider', 'Codebase context retrieved', {
-                contextLength: codebaseContext.length,
-              })
-            } else {
-              Logger.debug('MainViewProvider', 'No workspace folder found, skipping codebase context')
-            }
-
-            const request: ChatRequest = {
-              message: message.text,
-              fileContext: codebaseContext,
-              selectedCode: '',
-              conversationId: message.conversationId || 'default',
-            }
-            Logger.debug('MainViewProvider', 'Chat request prepared', {
-              messageLength: request.message.length,
-              contextLength: request.fileContext.length,
-              conversationId: request.conversationId,
-            })
-
-            // Stream response
-            Logger.info('MainViewProvider', 'Starting chat response stream')
-            let chunkCount = 0
-            for await (const chunk of this._llmService.streamChatResponse(request)) {
-              chunkCount++
-              this._view.webview.postMessage({
-                command: 'streamChunk',
-                chunk,
-              })
-            }
-            Logger.info('MainViewProvider', 'Chat response stream completed', { chunkCount })
-
-            this._view.webview.postMessage({
-              command: 'streamComplete',
-            })
-          } catch (error) {
-            Logger.error('MainViewProvider', 'Error sending chat message', error)
-            this._view.webview.postMessage({
-              command: 'error',
-              error: error instanceof Error ? error.message : 'Unknown error',
-            })
-          }
-        } else {
-          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for chat')
-        }
-        break
-
-      case 'navigate':
-        Logger.info('MainViewProvider', 'Navigation requested', {
-          page: message.page,
-        })
-        // Handle navigation requests - update webview
-        if (this._view) {
-          this._view.webview.postMessage({
-            command: 'navigate',
-            page: message.page,
-          })
-          Logger.debug('MainViewProvider', 'Navigation message sent to webview')
-        } else {
-          Logger.warn('MainViewProvider', 'Cannot navigate: webview not available')
-        }
-        break
-
-      case 'codeReview':
-        Logger.info('MainViewProvider', 'Code review requested', {
-          action: message.action,
-          file: message.file,
-        })
-        // Handle code review requests
-        if (this._llmService && this._configService) {
-          try {
-            const workspaceFolders = vscode.workspace.workspaceFolders
-            let codebaseContext = ''
-            if (workspaceFolders && workspaceFolders.length > 0) {
-              Logger.debug('MainViewProvider', 'Getting codebase context for code review')
-              codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
-              Logger.debug('MainViewProvider', 'Codebase context retrieved for review', {
-                contextLength: codebaseContext.length,
-              })
-            }
-            // Placeholder for code review functionality - results will be formatted in webview
-            Logger.debug('MainViewProvider', 'Scheduling code review results')
-            setTimeout(() => {
-              Logger.debug('MainViewProvider', 'Sending code review results')
-              this._view?.webview.postMessage({
-                command: 'reviewResults',
-                results: { 
-                  message: 'Code review feature coming soon',
-                  files: codebaseContext ? ['Check files for issues...'] : [],
-                },
-              })
-            }, 500)
-          } catch (error) {
-            Logger.error('MainViewProvider', 'Code review failed', error)
-            this._view?.webview.postMessage({
-              command: 'reviewResults',
-              results: { error: error instanceof Error ? error.message : 'Unknown error' },
-            })
-          }
-        } else {
-          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for code review')
-        }
-        break
-
-      case 'research':
-        Logger.info('MainViewProvider', 'Research requested', {
-          query: message.query,
-        })
-        // Handle research requests
-        if (this._llmService && this._configService) {
-          try {
-            const workspaceFolders = vscode.workspace.workspaceFolders
-            let codebaseContext = ''
-            if (workspaceFolders && workspaceFolders.length > 0) {
-              Logger.debug('MainViewProvider', 'Getting codebase context for research')
-              codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
-              Logger.debug('MainViewProvider', 'Codebase context retrieved for research', {
-                contextLength: codebaseContext.length,
-              })
-            }
-            // Placeholder for research functionality - results will be formatted in webview
-            Logger.debug('MainViewProvider', 'Scheduling research results')
-            setTimeout(() => {
-              Logger.debug('MainViewProvider', 'Sending research results')
-              this._view?.webview.postMessage({
-                command: 'researchResults',
-                results: [{ 
-                  file: 'example.ts', 
-                  content: 'Research results coming soon',
-                  filePath: workspaceFolders?.[0]?.uri.fsPath || '',
-                }],
-              })
-            }, 500)
-          } catch (error) {
-            Logger.error('MainViewProvider', 'Research failed', error)
-            this._view?.webview.postMessage({
-              command: 'researchResults',
-              results: [{ error: error instanceof Error ? error.message : 'Unknown error' }],
-            })
-          }
-        } else {
-          Logger.error('MainViewProvider', 'LLMService or ConfigService not available for research')
-        }
-        break
-
-      case 'openSettings':
-        Logger.info('MainViewProvider', 'Opening settings', {
-          section: message.section,
-        })
-        // Open VS Code settings
-        if (message.section === 'api') {
-          Logger.debug('MainViewProvider', 'Opening API configuration')
-          vscode.commands.executeCommand('scriptly.configureAPI')
-        }
-        break
-
-      case 'logout':
-        Logger.info('MainViewProvider', 'Logout requested')
-        // Handle logout
-        if (this._view) {
-          Logger.debug('MainViewProvider', 'Sending logout message to webview')
-          this._view.webview.postMessage({
-            command: 'logout',
-          })
-        } else {
-          Logger.warn('MainViewProvider', 'Cannot logout: webview not available')
-        }
-        // Clear API keys from secrets (optional - user might want to keep them)
-        // For now, just reset auth state
-        break
-
-      case 'openFile':
-        Logger.info('MainViewProvider', 'Opening file', {
-          filePath: message.filePath,
-          lineNumber: message.lineNumber,
-          column: message.column,
-          endLine: message.endLine,
-        })
-        // Open file in VS Code editor at specified line and column
-        try {
-          const workspaceFolders = vscode.workspace.workspaceFolders
-          const workspacePath = workspaceFolders && workspaceFolders.length > 0 
-            ? workspaceFolders[0].uri.fsPath 
-            : undefined
-          Logger.debug('MainViewProvider', 'Workspace path for file open', {
+        Logger.debug('MainViewProvider', 'Workspace path resolved', {
             workspacePath: workspacePath || '(none)',
-          })
-
-          await VSCodeActions.openFile(
-            message.filePath,
-            message.lineNumber,
-            message.column,
-            message.endLine,
-            workspacePath
-          )
-          Logger.info('MainViewProvider', 'File opened successfully')
-        } catch (error) {
-          Logger.error('MainViewProvider', 'Failed to open file', error)
-          if (this._view) {
-            this._view.webview.postMessage({
-              command: 'error',
-              error: `Failed to open file: ${error instanceof Error ? error.message : String(error)}`,
-            })
-          }
-        }
-        break
-
-      case 'openURL':
-        Logger.info('MainViewProvider', 'Opening URL', {
-          url: message.url,
+            hasWorkspace: !!workspacePath,
         })
-        // Open URL in external browser
-        try {
-          await VSCodeActions.openURL(message.url)
-          Logger.info('MainViewProvider', 'URL opened successfully')
-        } catch (error) {
-          Logger.error('MainViewProvider', 'Failed to open URL', error)
-          if (this._view) {
-            this._view.webview.postMessage({
-              command: 'error',
-              error: `Failed to open URL: ${error instanceof Error ? error.message : String(error)}`,
-            })
-          }
-        }
-        break
 
-      case 'openEmail':
-        Logger.info('MainViewProvider', 'Opening email', {
-          email: message.email,
+        Logger.debug('MainViewProvider', 'Generating webview HTML content')
+        webviewView.webview.html = this._getWebviewContent(webviewView.webview, hasApiKey, workspacePath)
+        Logger.info('MainViewProvider', 'Webview HTML content set', {
+            hasApiKey,
+            contentLength: webviewView.webview.html.length,
         })
-        // Open email client with mailto link
-        try {
-          await VSCodeActions.openEmail(message.email)
-          Logger.info('MainViewProvider', 'Email client opened successfully')
-        } catch (error) {
-          Logger.error('MainViewProvider', 'Failed to open email', error)
-          if (this._view) {
-            this._view.webview.postMessage({
-              command: 'error',
-              error: `Failed to open email: ${error instanceof Error ? error.message : String(error)}`,
-            })
-          }
-        }
-        break
 
-      case 'showGitCommit':
-        Logger.info('MainViewProvider', 'Showing git commit', {
-          hash: message.hash,
-        })
-        // Show git commit information
-        try {
-          await VSCodeActions.showGitCommit(message.hash)
-          Logger.info('MainViewProvider', 'Git commit shown successfully')
-        } catch (error) {
-          Logger.error('MainViewProvider', 'Failed to show git commit', error)
-          if (this._view) {
-            this._view.webview.postMessage({
-              command: 'error',
-              error: `Failed to show git commit: ${error instanceof Error ? error.message : String(error)}`,
+        // Handle messages from webview
+        webviewView.webview.onDidReceiveMessage(async (message) => {
+            Logger.debug('MainViewProvider', 'Received message from webview', {
+                command: message.command,
+                hasProvider: !!message.provider,
+                hasText: !!message.text,
+                hasPage: !!message.page,
             })
-          }
-        }
-        break
-
-      default:
-        Logger.warn('MainViewProvider', 'Unknown message command received', {
-          command: message.command,
-          messageKeys: Object.keys(message),
+            await this._handleMessage(message)
         })
-        break
+
+        Logger.info('MainViewProvider', 'Webview view resolved successfully')
     }
-  }
 
-  private async _getCodebaseContext(workspacePath: string): Promise<string> {
-    Logger.debug('MainViewProvider', 'Getting codebase context', {
-      workspacePath,
-    })
-    try {
-      const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.sql', '.vue', '.svelte']
-      const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'out', '.next', '.vscode', 'coverage', '.turbo', 'logs', 'log']
-      const ignoreFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', '.gitignore', '.env', '.log']
-      
-      const priorityFiles = ['package.json', 'tsconfig.json', 'README.md', 'index.ts', 'index.js', 'main.ts', 'main.js', 'app.ts', 'app.js']
-      
-      const codeFiles: Array<{ path: string; content: string; name: string; priority: number }> = []
-      const maxFileSize = 50000
-      const maxFiles = 20
-      const maxCharsPerFile = 800
-      const maxTotalChars = 15000
+    private async _checkApiKeyConfigured(): Promise<boolean> {
+        if (!this._configService) {
+            Logger.warn('MainViewProvider', 'ConfigService not available for API key check')
+            return false
+        }
 
-      Logger.debug('MainViewProvider', 'Codebase context parameters', {
-        maxFiles,
-        maxCharsPerFile,
-        maxTotalChars,
-        maxFileSize,
-      })
-
-      const getFilePriority = (fileName: string, filePath: string): number => {
-        if (priorityFiles.includes(fileName)) return 10
-        if (fileName.includes('config')) return 8
-        if (fileName.startsWith('index') || fileName.startsWith('main') || fileName.startsWith('app')) return 7
-        if (filePath.includes('src') || filePath.includes('lib') || filePath.includes('components')) return 6
-        if (filePath.includes('test') || filePath.includes('spec')) return 2
-        return 1
-      }
-
-      const walkDir = (dir: string, depth: number = 0): void => {
-        if (depth > 4) return
-        
         try {
-          const entries = fs.readdirSync(dir, { withFileTypes: true })
-          Logger.debug('MainViewProvider', 'Walking directory', {
-            dir,
-            depth,
-            entriesCount: entries.length,
-            currentFilesCount: codeFiles.length,
-          })
-          
-          entries.sort((a, b) => {
-            if (a.isDirectory() && !b.isDirectory()) return 1
-            if (!a.isDirectory() && b.isDirectory()) return -1
-            const aPriority = getFilePriority(a.name, path.join(dir, a.name))
-            const bPriority = getFilePriority(b.name, path.join(dir, b.name))
-            return bPriority - aPriority
-          })
-          
-          for (const entry of entries) {
-            if (codeFiles.length >= maxFiles) {
-              Logger.debug('MainViewProvider', 'Reached max files limit', {
-                maxFiles,
-                currentCount: codeFiles.length,
-              })
-              break
+            // First, try to get the LLM config
+            const config = await this._configService.getLLMConfig()
+
+            // Check if API key exists in config
+            if (config.apiKey && config.apiKey.trim().length > 0) {
+                Logger.debug('MainViewProvider', 'API key found in config', {
+                    provider: config.provider,
+                    keyLength: config.apiKey.length,
+                })
+                return true
             }
-            
-            const fullPath = path.join(dir, entry.name)
-            const relativePath = path.relative(workspacePath, fullPath)
-            
-            if (entry.isDirectory()) {
-              if (!ignoreDirs.includes(entry.name) && !entry.name.startsWith('.') && !relativePath.includes('node_modules')) {
-                walkDir(fullPath, depth + 1)
-              }
-            } else if (entry.isFile()) {
-              const ext = path.extname(entry.name).toLowerCase()
-              const isPriorityFile = priorityFiles.includes(entry.name)
-              
-              if ((codeExtensions.includes(ext) || isPriorityFile) && !ignoreFiles.includes(entry.name)) {
-                try {
-                  const stats = fs.statSync(fullPath)
-                  if (stats.size <= maxFileSize) {
-                    const content = fs.readFileSync(fullPath, 'utf8')
-                    const priority = getFilePriority(entry.name, relativePath)
-                    const contentLimit = isPriorityFile ? 1200 : maxCharsPerFile
-                    
-                    codeFiles.push({
-                      path: relativePath,
-                      content: content.substring(0, contentLimit),
-                      name: entry.name,
-                      priority,
+
+            // For Ollama, no API key is needed
+            if (config.provider === 'ollama') {
+                Logger.debug('MainViewProvider', 'Ollama provider detected, no API key needed')
+                return true
+            }
+
+            // Fallback: Check secrets directly for any configured provider
+            Logger.debug('MainViewProvider', 'API key not in config, checking secrets directly', {
+                provider: config.provider,
+            })
+
+            // Check for the configured provider's API key
+            const directApiKey = await this._configService.getApiKey(config.provider)
+            if (directApiKey && directApiKey.trim().length > 0) {
+                Logger.info('MainViewProvider', 'API key found in secrets (fallback check)', {
+                    provider: config.provider,
+                    keyLength: directApiKey.length,
+                })
+                return true
+            }
+
+            // Check for any provider that might have an API key
+            const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'custom']
+            for (const provider of providers) {
+                const key = await this._configService.getApiKey(provider)
+                if (key && key.trim().length > 0) {
+                    Logger.info('MainViewProvider', `Found API key for alternative provider: ${provider}`, {
+                        keyLength: key.length,
                     })
-                    Logger.debug('MainViewProvider', 'Added file to context', {
-                      path: relativePath,
-                      priority,
-                      contentLength: content.substring(0, contentLimit).length,
-                      fileSize: stats.size,
-                    })
-                  } else {
-                    Logger.debug('MainViewProvider', 'Skipping file (too large)', {
-                      path: relativePath,
-                      size: stats.size,
-                      maxSize: maxFileSize,
-                    })
-                  }
-                } catch (fileError) {
-                  Logger.debug('MainViewProvider', 'Skipping unreadable file', {
-                    path: relativePath,
-                    error: fileError instanceof Error ? fileError.message : String(fileError),
-                  })
+                    // Update the provider setting to use this one
+                    const workspaceConfig = vscode.workspace.getConfiguration('scriptly')
+                    await workspaceConfig.update('llmProvider', provider, vscode.ConfigurationTarget.Global)
+                    return true
                 }
-              }
             }
-          }
-        } catch (dirError) {
-          Logger.debug('MainViewProvider', 'Skipping inaccessible directory', {
-            dir,
-            error: dirError instanceof Error ? dirError.message : String(dirError),
-          })
+
+            Logger.debug('MainViewProvider', 'No API key found for any provider')
+            return false
+        } catch (error) {
+            Logger.error('MainViewProvider', 'Error checking API key configuration', error)
+            return false
         }
-      }
-
-      Logger.debug('MainViewProvider', 'Starting directory walk', { workspacePath })
-      walkDir(workspacePath)
-      Logger.info('MainViewProvider', 'Directory walk completed', {
-        filesFound: codeFiles.length,
-      })
-
-      if (codeFiles.length === 0) {
-        Logger.warn('MainViewProvider', 'No code files found in workspace')
-        return ''
-      }
-
-      codeFiles.sort((a, b) => b.priority - a.priority)
-      Logger.debug('MainViewProvider', 'Files sorted by priority', {
-        topFiles: codeFiles.slice(0, 5).map(f => ({ path: f.path, priority: f.priority })),
-      })
-
-      let context = `Project Codebase (${codeFiles.length} key files):\n\n`
-      let totalChars = context.length
-      let filesIncluded = 0
-
-      for (const file of codeFiles) {
-        const fileContext = `[${file.path}]\n${file.content}\n\n`
-        const fileContextLength = fileContext.length
-        
-        if (totalChars + fileContextLength > maxTotalChars) {
-          Logger.debug('MainViewProvider', 'Reached max total chars limit', {
-            totalChars,
-            maxTotalChars,
-            filesIncluded,
-            totalFiles: codeFiles.length,
-          })
-          break
-        }
-        
-        context += fileContext
-        totalChars += fileContextLength
-        filesIncluded++
-      }
-
-      Logger.info('MainViewProvider', 'Codebase context generated', {
-        totalFiles: codeFiles.length,
-        filesIncluded,
-        totalChars,
-        contextLength: context.length,
-      })
-
-      return context
-    } catch (error) {
-      Logger.error('MainViewProvider', 'Failed to get codebase context', error)
-      return ''
     }
-  }
 
-  private _getWebviewContent(webview: vscode.Webview, hasApiKey: boolean, workspacePath: string = ''): string {
-    return `<!DOCTYPE html>
+    private async _handleMessage(message: any) {
+        if (!this._view) {
+            Logger.warn('MainViewProvider', 'Received message but webview is not available', {
+                command: message.command,
+            })
+            return
+        }
+
+        Logger.debug('MainViewProvider', 'Handling message', {
+            command: message.command,
+            messageKeys: Object.keys(message),
+        })
+
+        switch (message.command) {
+            case 'ready':
+                Logger.info('MainViewProvider', 'Webview ready message received')
+                // Webview is ready
+                const hasApiKey = await this._checkApiKeyConfigured()
+                Logger.info('MainViewProvider', 'Sending auth state to webview', { hasApiKey })
+                this._view.webview.postMessage({
+                    command: 'setAuth',
+                    isAuthenticated: hasApiKey,
+                })
+                break
+
+            case 'error':
+                // Log error from webview
+                Logger.error('MainViewProvider', 'Error from webview', {
+                    error: message.error,
+                    stack: message.stack,
+                })
+                break
+
+            case 'clearStorage':
+                // Clear all storage and reset
+                try {
+                    Logger.info('MainViewProvider', 'Clearing storage as requested by user')
+
+                    // Clear all API keys from secrets
+                    const providers: Array<'openai' | 'claude' | 'ollama' | 'custom'> = ['openai', 'claude', 'ollama', 'custom']
+                    for (const provider of providers) {
+                        const keyName = `scriptly.apiKey.${provider}`
+                        await this._context.secrets.delete(keyName)
+                        Logger.debug('MainViewProvider', `Cleared API key for ${provider}`)
+                    }
+
+                    // Reset configuration
+                    const config = vscode.workspace.getConfiguration('scriptly')
+                    await config.update('llmProvider', 'openai', vscode.ConfigurationTarget.Global)
+
+                    // Refresh the webview
+                    const hasApiKeyAfterClear = await this._checkApiKeyConfigured()
+                    const workspaceFolders = vscode.workspace.workspaceFolders
+                    const workspacePath = workspaceFolders && workspaceFolders.length > 0
+                        ? workspaceFolders[0].uri.fsPath
+                        : ''
+
+                    this._view.webview.html = this._getWebviewContent(this._view.webview, hasApiKeyAfterClear, workspacePath)
+
+                    vscode.window.showInformationMessage('Scriptly: Storage cleared successfully. Please configure your API key again.')
+                } catch (error) {
+                    Logger.error('MainViewProvider', 'Failed to clear storage', error)
+                    vscode.window.showErrorMessage(`Failed to clear storage: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                }
+                break
+
+            case 'reloadExtension':
+                // Reload the extension
+                Logger.info('MainViewProvider', 'Reloading extension as requested by user')
+                vscode.commands.executeCommand('workbench.action.reloadWindow')
+                break
+
+            case 'configureAPI':
+                Logger.info('MainViewProvider', 'Configuring API key', {
+                    provider: message.provider,
+                    apiKeyLength: message.apiKey?.length || 0,
+                })
+                if (this._configService) {
+                    try {
+                        Logger.debug('MainViewProvider', 'Setting API key')
+                        await this._configService.setApiKey(message.provider, message.apiKey)
+                        Logger.debug('MainViewProvider', 'Validating API key')
+                        const valid = await this._configService.validateApiKey(
+                            message.provider
+                        )
+                        Logger.info('MainViewProvider', 'API key validation result', { valid })
+                        this._view.webview.postMessage({
+                            command: 'apiKeyConfigured',
+                            success: valid,
+                        })
+                        if (valid) {
+                            Logger.info('MainViewProvider', 'API key valid, sending auth update')
+                            this._view.webview.postMessage({
+                                command: 'setAuth',
+                                isAuthenticated: true,
+                            })
+                        }
+                    } catch (error) {
+                        Logger.error('MainViewProvider', 'Failed to configure API key', error)
+                        this._view.webview.postMessage({
+                            command: 'apiKeyConfigured',
+                            success: false,
+                            error: error instanceof Error ? error.message : 'Unknown error',
+                        })
+                    }
+                } else {
+                    Logger.error('MainViewProvider', 'ConfigService not available for API configuration')
+                }
+                break
+
+            case 'sendMessage':
+                Logger.info('MainViewProvider', 'Sending chat message', {
+                    messageLength: message.text?.length || 0,
+                    provider: message.provider,
+                    conversationId: message.conversationId,
+                })
+                if (this._llmService && this._configService) {
+                    try {
+                        Logger.debug('MainViewProvider', 'Getting LLM config')
+                        const config = await this._configService.getLLMConfig()
+                        Logger.debug('MainViewProvider', 'LLM config retrieved', {
+                            provider: config.provider,
+                            hasApiKey: !!config.apiKey,
+                            modelName: config.modelName,
+                        })
+
+                        if (!config.apiKey && config.provider !== 'ollama') {
+                            Logger.warn('MainViewProvider', 'API key not configured for chat')
+                            this._view.webview.postMessage({
+                                command: 'error',
+                                error: 'API key not configured',
+                            })
+                            return
+                        }
+
+                        // Switch provider if requested
+                        if (message.provider && message.provider !== config.provider) {
+                            Logger.info('MainViewProvider', 'Switching provider', {
+                                from: config.provider,
+                                to: message.provider,
+                            })
+                            await vscode.workspace
+                                .getConfiguration('scriptly')
+                                .update('llmProvider', message.provider, vscode.ConfigurationTarget.Workspace)
+                            // Invalidate model to force reload with new provider
+                            if (this._llmService) {
+                                this._llmService.invalidateModel()
+                                Logger.debug('MainViewProvider', 'Model invalidated for provider switch')
+                            }
+                            // Get fresh config with new provider
+                            const newConfig = await this._configService.getLLMConfig()
+                            Logger.debug('MainViewProvider', 'New provider config retrieved', {
+                                provider: newConfig.provider,
+                                hasApiKey: !!newConfig.apiKey,
+                            })
+                            if (!newConfig.apiKey && newConfig.provider !== 'ollama') {
+                                Logger.warn('MainViewProvider', `API key not configured for ${newConfig.provider}`)
+                                this._view.webview.postMessage({
+                                    command: 'error',
+                                    error: `API key not configured for ${newConfig.provider}`,
+                                })
+                                return
+                            }
+                        }
+
+                        // Get workspace context
+                        const workspaceFolders = vscode.workspace.workspaceFolders
+                        let codebaseContext = ''
+
+                        if (workspaceFolders && workspaceFolders.length > 0) {
+                            Logger.debug('MainViewProvider', 'Getting codebase context', {
+                                workspacePath: workspaceFolders[0].uri.fsPath,
+                            })
+                            codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+                            Logger.debug('MainViewProvider', 'Codebase context retrieved', {
+                                contextLength: codebaseContext.length,
+                            })
+                        } else {
+                            Logger.debug('MainViewProvider', 'No workspace folder found, skipping codebase context')
+                        }
+
+                        const request: ChatRequest = {
+                            message: message.text,
+                            fileContext: codebaseContext,
+                            selectedCode: '',
+                            conversationId: message.conversationId || 'default',
+                        }
+                        Logger.debug('MainViewProvider', 'Chat request prepared', {
+                            messageLength: request.message.length,
+                            contextLength: request.fileContext.length,
+                            conversationId: request.conversationId,
+                        })
+
+                        // Stream response
+                        Logger.info('MainViewProvider', 'Starting chat response stream')
+                        let chunkCount = 0
+                        for await (const chunk of this._llmService.streamChatResponse(request)) {
+                            chunkCount++
+                            this._view.webview.postMessage({
+                                command: 'streamChunk',
+                                chunk,
+                            })
+                        }
+                        Logger.info('MainViewProvider', 'Chat response stream completed', { chunkCount })
+
+                        this._view.webview.postMessage({
+                            command: 'streamComplete',
+                        })
+                    } catch (error) {
+                        Logger.error('MainViewProvider', 'Error sending chat message', error)
+                        this._view.webview.postMessage({
+                            command: 'error',
+                            error: error instanceof Error ? error.message : 'Unknown error',
+                        })
+                    }
+                } else {
+                    Logger.error('MainViewProvider', 'LLMService or ConfigService not available for chat')
+                }
+                break
+
+            case 'navigate':
+                Logger.info('MainViewProvider', 'Navigation requested', {
+                    page: message.page,
+                })
+                // Handle navigation requests - update webview
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        command: 'navigate',
+                        page: message.page,
+                    })
+                    Logger.debug('MainViewProvider', 'Navigation message sent to webview')
+                } else {
+                    Logger.warn('MainViewProvider', 'Cannot navigate: webview not available')
+                }
+                break
+
+            case 'codeReview':
+                Logger.info('MainViewProvider', 'Code review requested', {
+                    action: message.action,
+                    file: message.file,
+                })
+                // Handle code review requests
+                if (this._llmService && this._configService) {
+                    try {
+                        const workspaceFolders = vscode.workspace.workspaceFolders
+                        let codebaseContext = ''
+                        if (workspaceFolders && workspaceFolders.length > 0) {
+                            Logger.debug('MainViewProvider', 'Getting codebase context for code review')
+                            codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+                            Logger.debug('MainViewProvider', 'Codebase context retrieved for review', {
+                                contextLength: codebaseContext.length,
+                            })
+                        }
+                        // Placeholder for code review functionality - results will be formatted in webview
+                        Logger.debug('MainViewProvider', 'Scheduling code review results')
+                        setTimeout(() => {
+                            Logger.debug('MainViewProvider', 'Sending code review results')
+                            this._view?.webview.postMessage({
+                                command: 'reviewResults',
+                                results: {
+                                    message: 'Code review feature coming soon',
+                                    files: codebaseContext ? ['Check files for issues...'] : [],
+                                },
+                            })
+                        }, 500)
+                    } catch (error) {
+                        Logger.error('MainViewProvider', 'Code review failed', error)
+                        this._view?.webview.postMessage({
+                            command: 'reviewResults',
+                            results: { error: error instanceof Error ? error.message : 'Unknown error' },
+                        })
+                    }
+                } else {
+                    Logger.error('MainViewProvider', 'LLMService or ConfigService not available for code review')
+                }
+                break
+
+            case 'research':
+                Logger.info('MainViewProvider', 'Research requested', {
+                    query: message.query,
+                })
+                // Handle research requests
+                if (this._llmService && this._configService) {
+                    try {
+                        const workspaceFolders = vscode.workspace.workspaceFolders
+                        let codebaseContext = ''
+                        if (workspaceFolders && workspaceFolders.length > 0) {
+                            Logger.debug('MainViewProvider', 'Getting codebase context for research')
+                            codebaseContext = await this._getCodebaseContext(workspaceFolders[0].uri.fsPath)
+                            Logger.debug('MainViewProvider', 'Codebase context retrieved for research', {
+                                contextLength: codebaseContext.length,
+                            })
+                        }
+                        // Placeholder for research functionality - results will be formatted in webview
+                        Logger.debug('MainViewProvider', 'Scheduling research results')
+                        setTimeout(() => {
+                            Logger.debug('MainViewProvider', 'Sending research results')
+                            this._view?.webview.postMessage({
+                                command: 'researchResults',
+                                results: [{
+                                    file: 'example.ts',
+                                    content: 'Research results coming soon',
+                                    filePath: workspaceFolders?.[0]?.uri.fsPath || '',
+                                }],
+                            })
+                        }, 500)
+                    } catch (error) {
+                        Logger.error('MainViewProvider', 'Research failed', error)
+                        this._view?.webview.postMessage({
+                            command: 'researchResults',
+                            results: [{ error: error instanceof Error ? error.message : 'Unknown error' }],
+                        })
+                    }
+                } else {
+                    Logger.error('MainViewProvider', 'LLMService or ConfigService not available for research')
+                }
+                break
+
+            case 'openSettings':
+                Logger.info('MainViewProvider', 'Opening settings', {
+                    section: message.section,
+                })
+                // Open VS Code settings
+                if (message.section === 'api') {
+                    Logger.debug('MainViewProvider', 'Opening API configuration')
+                    vscode.commands.executeCommand('scriptly.configureAPI')
+                }
+                break
+
+            case 'logout':
+                Logger.info('MainViewProvider', 'Logout requested')
+                // Handle logout
+                if (this._view) {
+                    Logger.debug('MainViewProvider', 'Sending logout message to webview')
+                    this._view.webview.postMessage({
+                        command: 'logout',
+                    })
+                } else {
+                    Logger.warn('MainViewProvider', 'Cannot logout: webview not available')
+                }
+                // Clear API keys from secrets (optional - user might want to keep them)
+                // For now, just reset auth state
+                break
+
+            case 'openFile':
+                Logger.info('MainViewProvider', 'Opening file', {
+                    filePath: message.filePath,
+                    lineNumber: message.lineNumber,
+                    column: message.column,
+                    endLine: message.endLine,
+                })
+                // Open file in VS Code editor at specified line and column
+                try {
+                    const workspaceFolders = vscode.workspace.workspaceFolders
+                    const workspacePath = workspaceFolders && workspaceFolders.length > 0
+                        ? workspaceFolders[0].uri.fsPath
+                        : undefined
+                    Logger.debug('MainViewProvider', 'Workspace path for file open', {
+                        workspacePath: workspacePath || '(none)',
+                    })
+
+                    await VSCodeActions.openFile(
+                        message.filePath,
+                        message.lineNumber,
+                        message.column,
+                        message.endLine,
+                        workspacePath
+                    )
+                    Logger.info('MainViewProvider', 'File opened successfully')
+                } catch (error) {
+                    Logger.error('MainViewProvider', 'Failed to open file', error)
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            command: 'error',
+                            error: `Failed to open file: ${error instanceof Error ? error.message : String(error)}`,
+                        })
+                    }
+                }
+                break
+
+            case 'openURL':
+                Logger.info('MainViewProvider', 'Opening URL', {
+                    url: message.url,
+                })
+                // Open URL in external browser
+                try {
+                    await VSCodeActions.openURL(message.url)
+                    Logger.info('MainViewProvider', 'URL opened successfully')
+                } catch (error) {
+                    Logger.error('MainViewProvider', 'Failed to open URL', error)
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            command: 'error',
+                            error: `Failed to open URL: ${error instanceof Error ? error.message : String(error)}`,
+                        })
+                    }
+                }
+                break
+
+            case 'openEmail':
+                Logger.info('MainViewProvider', 'Opening email', {
+                    email: message.email,
+                })
+                // Open email client with mailto link
+                try {
+                    await VSCodeActions.openEmail(message.email)
+                    Logger.info('MainViewProvider', 'Email client opened successfully')
+                } catch (error) {
+                    Logger.error('MainViewProvider', 'Failed to open email', error)
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            command: 'error',
+                            error: `Failed to open email: ${error instanceof Error ? error.message : String(error)}`,
+                        })
+                    }
+                }
+                break
+
+            case 'showGitCommit':
+                Logger.info('MainViewProvider', 'Showing git commit', {
+                    hash: message.hash,
+                })
+                // Show git commit information
+                try {
+                    await VSCodeActions.showGitCommit(message.hash)
+                    Logger.info('MainViewProvider', 'Git commit shown successfully')
+                } catch (error) {
+                    Logger.error('MainViewProvider', 'Failed to show git commit', error)
+                    if (this._view) {
+                        this._view.webview.postMessage({
+                            command: 'error',
+                            error: `Failed to show git commit: ${error instanceof Error ? error.message : String(error)}`,
+                        })
+                    }
+                }
+                break
+
+            default:
+                Logger.warn('MainViewProvider', 'Unknown message command received', {
+                    command: message.command,
+                    messageKeys: Object.keys(message),
+                })
+                break
+        }
+    }
+
+    private async _getCodebaseContext(workspacePath: string): Promise<string> {
+        Logger.debug('MainViewProvider', 'Getting codebase context', {
+            workspacePath,
+        })
+        try {
+            const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.sql', '.vue', '.svelte']
+            const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'out', '.next', '.vscode', 'coverage', '.turbo', 'logs', 'log']
+            const ignoreFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', '.gitignore', '.env', '.log']
+
+            const priorityFiles = ['package.json', 'tsconfig.json', 'README.md', 'index.ts', 'index.js', 'main.ts', 'main.js', 'app.ts', 'app.js']
+
+            const codeFiles: Array<{ path: string; content: string; name: string; priority: number }> = []
+            const maxFileSize = 50000
+            const maxFiles = 20
+            const maxCharsPerFile = 800
+            const maxTotalChars = 15000
+
+            Logger.debug('MainViewProvider', 'Codebase context parameters', {
+                maxFiles,
+                maxCharsPerFile,
+                maxTotalChars,
+                maxFileSize,
+            })
+
+            const getFilePriority = (fileName: string, filePath: string): number => {
+                if (priorityFiles.includes(fileName)) return 10
+                if (fileName.includes('config')) return 8
+                if (fileName.startsWith('index') || fileName.startsWith('main') || fileName.startsWith('app')) return 7
+                if (filePath.includes('src') || filePath.includes('lib') || filePath.includes('components')) return 6
+                if (filePath.includes('test') || filePath.includes('spec')) return 2
+                return 1
+            }
+
+            const walkDir = (dir: string, depth: number = 0): void => {
+                if (depth > 4) return
+
+                try {
+                    const entries = fs.readdirSync(dir, { withFileTypes: true })
+                    Logger.debug('MainViewProvider', 'Walking directory', {
+                        dir,
+                        depth,
+                        entriesCount: entries.length,
+                        currentFilesCount: codeFiles.length,
+                    })
+
+                    entries.sort((a, b) => {
+                        if (a.isDirectory() && !b.isDirectory()) return 1
+                        if (!a.isDirectory() && b.isDirectory()) return -1
+                        const aPriority = getFilePriority(a.name, path.join(dir, a.name))
+                        const bPriority = getFilePriority(b.name, path.join(dir, b.name))
+                        return bPriority - aPriority
+                    })
+
+                    for (const entry of entries) {
+                        if (codeFiles.length >= maxFiles) {
+                            Logger.debug('MainViewProvider', 'Reached max files limit', {
+                                maxFiles,
+                                currentCount: codeFiles.length,
+                            })
+                            break
+                        }
+
+                        const fullPath = path.join(dir, entry.name)
+                        const relativePath = path.relative(workspacePath, fullPath)
+
+                        if (entry.isDirectory()) {
+                            if (!ignoreDirs.includes(entry.name) && !entry.name.startsWith('.') && !relativePath.includes('node_modules')) {
+                                walkDir(fullPath, depth + 1)
+                            }
+                        } else if (entry.isFile()) {
+                            const ext = path.extname(entry.name).toLowerCase()
+                            const isPriorityFile = priorityFiles.includes(entry.name)
+
+                            if ((codeExtensions.includes(ext) || isPriorityFile) && !ignoreFiles.includes(entry.name)) {
+                                try {
+                                    const stats = fs.statSync(fullPath)
+                                    if (stats.size <= maxFileSize) {
+                                        const content = fs.readFileSync(fullPath, 'utf8')
+                                        const priority = getFilePriority(entry.name, relativePath)
+                                        const contentLimit = isPriorityFile ? 1200 : maxCharsPerFile
+
+                                        codeFiles.push({
+                                            path: relativePath,
+                                            content: content.substring(0, contentLimit),
+                                            name: entry.name,
+                                            priority,
+                                        })
+                                        Logger.debug('MainViewProvider', 'Added file to context', {
+                                            path: relativePath,
+                                            priority,
+                                            contentLength: content.substring(0, contentLimit).length,
+                                            fileSize: stats.size,
+                                        })
+                                    } else {
+                                        Logger.debug('MainViewProvider', 'Skipping file (too large)', {
+                                            path: relativePath,
+                                            size: stats.size,
+                                            maxSize: maxFileSize,
+                                        })
+                                    }
+                                } catch (fileError) {
+                                    Logger.debug('MainViewProvider', 'Skipping unreadable file', {
+                                        path: relativePath,
+                                        error: fileError instanceof Error ? fileError.message : String(fileError),
+                                    })
+                                }
+                            }
+                        }
+                    }
+                } catch (dirError) {
+                    Logger.debug('MainViewProvider', 'Skipping inaccessible directory', {
+                        dir,
+                        error: dirError instanceof Error ? dirError.message : String(dirError),
+                    })
+                }
+            }
+
+            Logger.debug('MainViewProvider', 'Starting directory walk', { workspacePath })
+            walkDir(workspacePath)
+            Logger.info('MainViewProvider', 'Directory walk completed', {
+                filesFound: codeFiles.length,
+            })
+
+            if (codeFiles.length === 0) {
+                Logger.warn('MainViewProvider', 'No code files found in workspace')
+                return ''
+            }
+
+            codeFiles.sort((a, b) => b.priority - a.priority)
+            Logger.debug('MainViewProvider', 'Files sorted by priority', {
+                topFiles: codeFiles.slice(0, 5).map(f => ({ path: f.path, priority: f.priority })),
+            })
+
+            let context = `Project Codebase (${codeFiles.length} key files):\n\n`
+            let totalChars = context.length
+            let filesIncluded = 0
+
+            for (const file of codeFiles) {
+                const fileContext = `[${file.path}]\n${file.content}\n\n`
+                const fileContextLength = fileContext.length
+
+                if (totalChars + fileContextLength > maxTotalChars) {
+                    Logger.debug('MainViewProvider', 'Reached max total chars limit', {
+                        totalChars,
+                        maxTotalChars,
+                        filesIncluded,
+                        totalFiles: codeFiles.length,
+                    })
+                    break
+                }
+
+                context += fileContext
+                totalChars += fileContextLength
+                filesIncluded++
+            }
+
+            Logger.info('MainViewProvider', 'Codebase context generated', {
+                totalFiles: codeFiles.length,
+                filesIncluded,
+                totalChars,
+                contextLength: context.length,
+            })
+
+            return context
+        } catch (error) {
+            Logger.error('MainViewProvider', 'Failed to get codebase context', error)
+            return ''
+        }
+    }
+
+    private _getWebviewContent(webview: vscode.Webview, hasApiKey: boolean, workspacePath: string = ''): string {
+        return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline' https://unpkg.com; img-src ${webview.cspSource} https:; font-src ${webview.cspSource} https:;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scriptly</title>
     <style>
@@ -926,12 +927,12 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
     </script>
 </body>
 </html>`
-  }
+    }
 
-  private _getFallbackScript(): string {
-    // Fallback vanilla JS version if React fails to load
-    // Use string concatenation to avoid template literal nesting issues
-    return `
+    private _getFallbackScript(): string {
+        // Fallback vanilla JS version if React fails to load
+        // Use string concatenation to avoid template literal nesting issues
+        return `
         console.log('[Scriptly] Starting fallback script initialization');
         
         const root = document.getElementById('root');
@@ -1361,7 +1362,6 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                     '</div>' +
                 '</div>' +
                 '<div class="messages-container flex-1 overflow-y-auto p-6" id="messages" style="background: var(--surface);"><div class="welcome-message text-center mt-12"><p style="color: var(--text-secondary); font-size: 0.875rem;">Welcome to Scriptly Chat! Ask me anything about your code.</p></div></div>' +
-                '<script>if (typeof attachClickHandlers === "function") { setTimeout(function() { attachClickHandlers(document.getElementById("messages")); }, 100); }</script>' +
                 '<div class="input-container border-t p-4" style="border-top-color: var(--border-subtle); background: var(--surface);">' +
                     '<div class="input-wrapper flex gap-3">' +
                         '<input type="text" id="chatInput" placeholder="Ask about your code..." ' +
@@ -1386,6 +1386,13 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
                 backBtn.addEventListener('click', function() {
                     window.navigate('dashboard');
                 });
+            }
+            
+            // Attach click handlers to initial messages
+            if (typeof attachClickHandlers === "function") {
+                setTimeout(function() { 
+                    attachClickHandlers(document.getElementById("messages")); 
+                }, 100);
             }
         }
         
@@ -1723,12 +1730,12 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             }
         });
     `
-  }
+    }
 
-  private _getReactAppScript(): string {
-    // This will be replaced with a proper bundler later
-    // For now, return a simple React app that uses the components
-    return `
+    private _getReactAppScript(): string {
+        // This will be replaced with a proper bundler later
+        // For now, return a simple React app that uses the components
+        return `
         const { useState, useEffect, useRef } = React;
         const { create } = zustand;
         
@@ -2272,10 +2279,10 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
         
         ReactDOM.render(React.createElement(App), document.getElementById('root'));
     `
-  }
+    }
 
-  private _getStyles(): string {
-    return `
+    private _getStyles(): string {
+        return `
         * {
             box-sizing: border-box;
             margin: 0;
@@ -2843,27 +2850,27 @@ export class MainViewProvider implements vscode.WebviewViewProvider {
             cursor: pointer;
         }
     `
-  }
-
-  public refresh() {
-    Logger.info('MainViewProvider', 'Refresh requested')
-    if (this._view) {
-      Logger.debug('MainViewProvider', 'Refreshing webview content')
-      this._checkApiKeyConfigured().then((hasApiKey) => {
-        Logger.debug('MainViewProvider', 'API key check completed for refresh', { hasApiKey })
-        const workspaceFolders = vscode.workspace.workspaceFolders
-        const workspacePath = workspaceFolders && workspaceFolders.length > 0
-          ? workspaceFolders[0].uri.fsPath
-          : ''
-        this._view!.webview.html = this._getWebviewContent(this._view!.webview, hasApiKey, workspacePath)
-        Logger.info('MainViewProvider', 'Webview refreshed successfully')
-      }).catch((error) => {
-        Logger.error('MainViewProvider', 'Failed to refresh webview', error)
-      })
-    } else {
-      Logger.warn('MainViewProvider', 'Cannot refresh: webview not available')
     }
-  }
+
+    public refresh() {
+        Logger.info('MainViewProvider', 'Refresh requested')
+        if (this._view) {
+            Logger.debug('MainViewProvider', 'Refreshing webview content')
+            this._checkApiKeyConfigured().then((hasApiKey) => {
+                Logger.debug('MainViewProvider', 'API key check completed for refresh', { hasApiKey })
+                const workspaceFolders = vscode.workspace.workspaceFolders
+                const workspacePath = workspaceFolders && workspaceFolders.length > 0
+                    ? workspaceFolders[0].uri.fsPath
+                    : ''
+                this._view!.webview.html = this._getWebviewContent(this._view!.webview, hasApiKey, workspacePath)
+                Logger.info('MainViewProvider', 'Webview refreshed successfully')
+            }).catch((error) => {
+                Logger.error('MainViewProvider', 'Failed to refresh webview', error)
+            })
+        } else {
+            Logger.warn('MainViewProvider', 'Cannot refresh: webview not available')
+        }
+    }
 }
 
 
