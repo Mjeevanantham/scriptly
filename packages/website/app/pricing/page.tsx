@@ -1,16 +1,36 @@
 import { Container } from '@/components/common/Container'
+import { Breadcrumbs } from '@/components/common/Breadcrumbs'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'Pricing - Scriptly',
-  description: 'Simple, transparent pricing for Scriptly',
+export const metadata: Metadata = {
+  title: 'Pricing - Scriptly | Free Forever',
+  description:
+    'Scriptly is 100% free forever. No paywalls, no subscriptions, no hidden fees. Simple, transparent pricing for developers.',
+  keywords: [
+    'Scriptly pricing',
+    'free IDE',
+    'free code editor',
+    'Scriptly cost',
+    'free AI code editor',
+  ],
+  openGraph: {
+    title: 'Pricing - Scriptly',
+    description: 'Simple, transparent pricing for Scriptly',
+    url: 'https://scriptly-ai-ext.vercel.app/pricing',
+    siteName: 'Scriptly',
+  },
+  alternates: {
+    canonical: 'https://scriptly-ai-ext.vercel.app/pricing',
+  },
 }
 
 export default function PricingPage() {
   return (
     <div className="pt-32 pb-20">
       <Container>
+        <Breadcrumbs items={[{ label: 'Pricing' }]} />
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold mb-4">Simple, Transparent Pricing</h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">

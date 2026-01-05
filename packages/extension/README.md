@@ -59,30 +59,49 @@ code --install-extension jeeva-dev.scriptly
 
 ## ⚙️ Quick Start
 
-### 1. Configure Your API Key
+### Local development (run and debug the extension)
 
-After installation, you need to configure an API key for one of the supported LLM providers:
+1) From the repo root run the watcher (keeps running):
+```bash
+pnpm run dev:extension
+# or
+pnpm --filter ./packages/extension dev
+```
 
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) to open Command Palette
-2. Type "Scriptly: Configure API Keys"
-3. Select your provider (OpenAI, Claude, or Ollama)
-4. Enter your API key
+2) Open the `packages/extension` folder in VS Code (or the repo root), then launch the Extension Development Host:
+- Run → **Run Extension** (press **F5**) — this opens a new VS Code window (Extension Development Host) with the extension loaded.
+- If you want a single debug configuration that builds automatically before launch, use the provided `packages/extension/.vscode/launch.json` (it runs a `tsc` preLaunch task).
 
-### 2. Access Scriptly
+3) Configure API keys (in the Extension Development Host):
+- Press `Ctrl+Shift+P` → `Scriptly: Configure API Keys` and follow prompts
 
-- Click the **Scriptly** icon in the Activity Bar (robot icon)
-- Or press `Ctrl+Shift+L` (or `Cmd+Shift+L` on Mac)
-- The Scriptly sidebar will open with the Chat panel
+4) Use the extension in the Extension Development Host:
+- Click the **Scriptly** icon in the Activity Bar or press `Ctrl+Shift+L`
+- Open the Chat panel and try commands like **Find Bugs**, **Suggest Refactorings**, etc.
 
-### 3. Start Chatting
+> Tip: The TypeScript watcher (`tsc -w`) will not exit (it shows "Watching for file changes"). Keep it running while developing so changes compile automatically.
 
-- Type your questions in the chat input
-- Use suggestion buttons for quick actions:
-  - "Analyze the codebase"
-  - "Analyze and document it"
-  - "Research and find the bugs"
-- Click on file paths in responses to open them in VS Code
-- Click on URLs to open them in your browser
+### Commands (for convenience)
+
+```bash
+# Run extension watcher (from repo root)
+pnpm run dev:extension
+# Start backend in dev (if you need API)
+pnpm run dev:backend
+# Build extension for publishing
+pnpm --filter ./packages/extension package
+```
+
+### Troubleshooting
+
+- If the extension doesn't appear in the Extension Development Host:
+  - Ensure the watcher is running (`pnpm --filter ./packages/extension dev`) or use the launch config which triggers a build.
+  - Reload the window in the Extension Host (`Ctrl+Shift+P` → "Developer: Reload Window").
+  - Check the **Scriptly** output channel (View → Output → select "Scriptly").
+
+- If LLM calls fail, verify API keys and that the backend (if used) is running at `http://localhost:3001`.
+
+If you'd like, I can also add a short "Run locally" checklist into the top-level `README.md` (quick commands and the expected URLs).
 
 ## 🎯 Supported LLM Providers
 

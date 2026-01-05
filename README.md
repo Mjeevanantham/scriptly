@@ -4,6 +4,8 @@ Scriptly Monorepo
 
 Free, open-source, unified AI-powered Integrated Development Environment (IDE) that consolidates fragmented developer workflows into a single, privacy-first platform.
 
+**Run locally (quick):** `pnpm install` → `pnpm run dev:backend` (optional) → `pnpm run dev:extension` → Open `packages/extension` in VS Code and press **F5** to launch the Extension Development Host.
+
 ## Project Overview
 
 Scriptly is a monorepo containing:
@@ -37,15 +39,22 @@ pnpm dev
 ### Extension
 
 ```bash
-# Development
-pnpm --filter extension dev
+# Development (two options)
+# 1) From the repo root (path selector)
+pnpm --filter ./packages/extension dev
+# 2) From the extension package folder
+cd packages/extension && pnpm dev
+# Shortcut (added to root package.json)
+pnpm run dev:extension
 
 # Build
-pnpm --filter extension build
+pnpm --filter ./packages/extension build
 
 # Package for VS Code Marketplace
-pnpm --filter extension package
+pnpm --filter ./packages/extension package
 ```
+
+> NOTE: the extension's `dev` script runs `tsc -w` and remains running ("Watching for file changes"). While the watcher is running, open the extension in VS Code and press **F5** (Run → "Run Extension") to launch an Extension Development Host where the extension is loaded. If you prefer a one-step debug flow, a `.vscode/launch.json` is provided under `packages/extension` that runs a preLaunch build before opening the host.
 
 ### Website
 
@@ -209,7 +218,7 @@ No environment variables needed. API keys are stored securely via VS Code's secr
 Create `packages/website/.env.local`:
 
 ```env
-NEXT_PUBLIC_SITE_URL=https://scriptly.dev
+NEXT_PUBLIC_SITE_URL=https://scriptly-ai-ext.vercel.app
 NEXT_PUBLIC_GA_ID=G_XXXXXXXXX  # Optional: Google Analytics
 ```
 

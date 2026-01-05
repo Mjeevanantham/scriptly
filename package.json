@@ -5,6 +5,9 @@
   "description": "Scriptly - Free AI-powered IDE monorepo",
   "scripts": {
     "dev": "turbo run dev",
+    "dev:extension": "pnpm --filter ./packages/extension dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build:backend": "pnpm --filter backend build",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
@@ -29,4 +32,3 @@
   },
   "packageManager": "pnpm@8.15.0"
 }
-

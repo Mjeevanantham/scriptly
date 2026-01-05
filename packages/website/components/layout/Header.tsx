@@ -1,14 +1,16 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import { Menu, X } from 'lucide-react'
+import { GlobalSearch } from '@/components/common/Search'
 
 const navigation = [
   { name: 'Features', href: '/features' },
   { name: 'Why Scriptly', href: '/why-scriptly' },
   { name: 'Pricing', href: '/pricing' },
-  { name: 'Docs', href: 'https://github.com/thejands/scriptly' },
+  { name: 'Docs', href: 'https://github.com/Mjeevanantham/scriptly' },
   { name: 'Community', href: '/community' },
 ]
 
@@ -18,8 +20,15 @@ export default function Header() {
   return (
     <header className="fixed top-0 w-full z-50 backdrop-blur-sm bg-slate-950/80 border-b border-slate-800">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-blue-400 rounded-lg" />
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <Image
+            src="/primary_logo.png"
+            alt="Scriptly Logo"
+            width={32}
+            height={32}
+            className="w-8 h-8"
+            priority
+          />
           <span className="font-bold text-lg">Scriptly</span>
         </Link>
 
@@ -36,16 +45,17 @@ export default function Header() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
+          <GlobalSearch />
           <Link
-            href="https://github.com/thejands/scriptly"
+            href="https://github.com/Mjeevanantham/scriptly"
             target="_blank"
-            className="px-4 py-2 text-sm border border-slate-700 rounded-lg hover:bg-slate-900 transition"
+            className="px-4 py-2 text-sm border border-slate-700 rounded-lg hover:border-slate-600 hover:bg-slate-900/50 transition-all"
           >
             GitHub
           </Link>
           <Link
             href="/get-started"
-            className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-lg transition"
+            className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg transition-all shadow-md shadow-purple-500/20 hover:shadow-purple-500/30"
           >
             Download
           </Link>
@@ -78,7 +88,7 @@ export default function Header() {
             ))}
             <Link
               href="/get-started"
-              className="block px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-lg text-center"
+              className="block px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg text-center transition-all"
               onClick={() => setIsOpen(false)}
             >
               Download

@@ -1,42 +1,45 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
+  const baseUrl = 'https://scriptly-ai-ext.vercel.app'
+  const currentDate = new Date()
+
   return [
     {
-      url: 'https://scriptly.dev',
-      lastModified: new Date(),
+      url: baseUrl,
+      lastModified: currentDate,
       changeFrequency: 'weekly',
       priority: 1,
     },
     {
-      url: 'https://scriptly.dev/features',
-      lastModified: new Date(),
+      url: `${baseUrl}/features`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/why-scriptly`,
+      lastModified: currentDate,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: 'https://scriptly.dev/why-scriptly',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://scriptly.dev/get-started',
-      lastModified: new Date(),
+      url: `${baseUrl}/get-started`,
+      lastModified: currentDate,
       changeFrequency: 'monthly',
       priority: 0.9,
     },
     {
-      url: 'https://scriptly.dev/pricing',
-      lastModified: new Date(),
+      url: `${baseUrl}/pricing`,
+      lastModified: currentDate,
       changeFrequency: 'monthly',
-      priority: 0.7,
+      priority: 0.8,
     },
     {
-      url: 'https://scriptly.dev/community',
-      lastModified: new Date(),
+      url: `${baseUrl}/community`,
+      lastModified: currentDate,
       changeFrequency: 'weekly',
-      priority: 0.6,
+      priority: 0.7,
     },
   ]
 }

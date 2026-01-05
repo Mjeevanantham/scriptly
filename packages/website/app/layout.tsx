@@ -8,20 +8,38 @@ import { Analytics } from '@vercel/analytics/react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Scriptly - Free AI Code Editor',
+  metadataBase: new URL('https://scriptly-ai-ext.vercel.app'),
+  title: {
+    default: 'Scriptly - Free AI Code Editor',
+    template: '%s | Scriptly',
+  },
   description:
-    'Free, open-source AI IDE with code completion, chat, and unified workspace. Privacy-first alternative to Cursor.',
-  keywords: 'AI code editor, free IDE, cursor alternative, open-source',
+    'Free, open-source AI IDE with code completion, chat, and unified workspace. Privacy-first alternative to Cursor. 100% free forever.',
+  keywords: [
+    'AI code editor',
+    'free IDE',
+    'cursor alternative',
+    'open-source IDE',
+    'AI coding assistant',
+    'code completion',
+    'privacy-first IDE',
+  ],
+  authors: [{ name: 'Scriptly Team' }],
+  creator: 'Scriptly',
+  publisher: 'Scriptly',
   openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://scriptly-ai-ext.vercel.app',
+    siteName: 'Scriptly',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    url: 'https://scriptly.dev',
-    siteName: 'Scriptly',
     images: [
       {
-        url: 'https://scriptly.dev/og-image.png',
+        url: 'https://scriptly-ai-ext.vercel.app/og-image.png',
         width: 1200,
         height: 630,
+        alt: 'Scriptly - Free AI Code Editor',
       },
     ],
   },
@@ -29,7 +47,28 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly.dev/og-image.png'],
+    images: ['https://scriptly-ai-ext.vercel.app/og-image.png'],
+    creator: '@scriptly_dev',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  icons: {
+    icon: '/primary_logo.png',
+    apple: '/primary_logo.png',
+  },
+  verification: {
+    // Add verification codes when available
+    // google: 'your-google-verification-code',
+    // yandex: 'your-yandex-verification-code',
   },
 }
 

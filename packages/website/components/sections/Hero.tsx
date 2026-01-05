@@ -38,37 +38,37 @@ export default function Hero() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-4">
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span className="text-green-400">✅</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">
+              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+                <span className="text-green-400 text-lg">✓</span>
                 <span>100% Free & Open-Source</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span className="text-green-400">✅</span>
+              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+                <span className="text-green-400 text-lg">✓</span>
                 <span>50K+ Developers</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span className="text-green-400">✅</span>
+              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+                <span className="text-green-400 text-lg">✓</span>
                 <span>Privacy-First</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span className="text-green-400">✅</span>
+              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+                <span className="text-green-400 text-lg">✓</span>
                 <span>Multi-Model Support</span>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6">
+            <div className="flex flex-col sm:flex-row gap-4 pt-6">
               <Link
                 href="/get-started"
-                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition"
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-medium transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 text-center"
               >
                 Download Now
               </Link>
 
               <Link
-                href="https://github.com/thejands/scriptly"
+                href="https://github.com/Mjeevanantham/scriptly"
                 target="_blank"
-                className="px-6 py-3 border border-slate-700 hover:bg-slate-900 rounded-lg font-medium transition"
+                className="px-6 py-3 border border-slate-700 hover:border-slate-600 hover:bg-slate-900/50 rounded-lg font-medium transition-all text-center"
               >
                 View on GitHub
               </Link>
@@ -81,11 +81,18 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="relative"
           >
-            <div className="relative h-96 rounded-lg border border-slate-700 bg-slate-900/50 backdrop-blur overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
-              <div className="p-8 text-slate-400 text-center">
-                IDE Screenshot Placeholder
-              </div>
+            <div className="relative rounded-lg border border-slate-700 bg-slate-900/50 backdrop-blur overflow-hidden group shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent z-10" />
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
+              <Image
+                src="/images/hero-banner.png"
+                alt="Scriptly IDE - AI-powered code editor interface"
+                width={1200}
+                height={800}
+                priority
+                className="w-full h-auto object-contain"
+                quality={90}
+              />
             </div>
           </motion.div>
         </div>

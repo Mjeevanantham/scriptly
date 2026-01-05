@@ -1,16 +1,36 @@
 import { Container } from '@/components/common/Container'
+import { Breadcrumbs } from '@/components/common/Breadcrumbs'
 import Link from 'next/link'
 import { Github, MessageCircle, Twitter } from 'lucide-react'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'Community - Scriptly',
-  description: 'Join the Scriptly community',
+export const metadata: Metadata = {
+  title: 'Community - Scriptly | Join Our Developer Community',
+  description:
+    'Join the Scriptly community. Connect with developers on GitHub, Discord, and Twitter. Get help, share projects, and contribute to open-source.',
+  keywords: [
+    'Scriptly community',
+    'Scriptly Discord',
+    'Scriptly GitHub',
+    'Scriptly support',
+    'open-source community',
+  ],
+  openGraph: {
+    title: 'Community - Scriptly',
+    description: 'Join the Scriptly community',
+    url: 'https://scriptly-ai-ext.vercel.app/community',
+    siteName: 'Scriptly',
+  },
+  alternates: {
+    canonical: 'https://scriptly-ai-ext.vercel.app/community',
+  },
 }
 
 export default function CommunityPage() {
   return (
     <div className="pt-32 pb-20">
       <Container>
+        <Breadcrumbs items={[{ label: 'Community' }]} />
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold mb-4">Join the Scriptly Community</h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">
@@ -20,7 +40,7 @@ export default function CommunityPage() {
 
         <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <Link
-            href="https://github.com/thejands/scriptly"
+            href="https://github.com/Mjeevanantham/scriptly"
             target="_blank"
             className="border border-slate-800 rounded-lg p-8 bg-slate-900/50 hover:border-purple-500/50 transition group"
           >

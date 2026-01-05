@@ -36,7 +36,7 @@ export default function Comparison() {
             </thead>
             <tbody>
               {comparison.map((row, index) => (
-                <tr key={index} className="border-b border-slate-800 hover:bg-slate-900/50 transition">
+                <tr key={index} className="border-b border-slate-800 hover:bg-slate-900/50 transition-colors">
                   <td className="p-4 text-slate-300">{row.feature}</td>
                   <td className="p-4 text-center">
                     {typeof row.scriptly === 'boolean' ? (

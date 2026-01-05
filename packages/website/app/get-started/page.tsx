@@ -1,16 +1,36 @@
 import { Container } from '@/components/common/Container'
+import { Breadcrumbs } from '@/components/common/Breadcrumbs'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'Get Started - Scriptly',
-  description: 'Get started with Scriptly in 60 seconds',
+export const metadata: Metadata = {
+  title: 'Get Started with Scriptly - Installation Guide',
+  description:
+    'Get started with Scriptly in 60 seconds. Install the VS Code extension, configure your API key, and start coding with AI assistance.',
+  keywords: [
+    'Scriptly installation',
+    'how to install Scriptly',
+    'Scriptly setup',
+    'Scriptly tutorial',
+    'get started Scriptly',
+  ],
+  openGraph: {
+    title: 'Get Started with Scriptly',
+    description: 'Get started with Scriptly in 60 seconds',
+    url: 'https://scriptly-ai-ext.vercel.app/get-started',
+    siteName: 'Scriptly',
+  },
+  alternates: {
+    canonical: 'https://scriptly-ai-ext.vercel.app/get-started',
+  },
 }
 
 export default function GetStartedPage() {
   return (
     <div className="pt-32 pb-20">
       <Container>
+        <Breadcrumbs items={[{ label: 'Get Started' }]} />
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold mb-4">Get Started in 60 Seconds</h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">
@@ -30,7 +50,7 @@ export default function GetStartedPage() {
                   Install Scriptly from the VS Code Marketplace or download the desktop app.
                 </p>
                 <Link
-                  href="https://marketplace.visualstudio.com/vscode"
+                  href="https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly"
                   target="_blank"
                   className="inline-block px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition"
                 >

@@ -3,6 +3,7 @@
 import { Container } from '@/components/common/Container'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 const faqs = [
   {
@@ -54,21 +55,29 @@ export default function FAQ() {
           {faqs.map((faq, index) => (
             <div
               key={index}
-              className="border border-slate-800 rounded-lg bg-slate-900/50"
+              className="border border-slate-800 rounded-lg bg-slate-900/50 hover:border-slate-700 transition-colors"
             >
               <button
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full flex items-center justify-between p-6 text-left hover:bg-slate-800/50 transition rounded-lg"
+                className="w-full flex items-center justify-between p-6 text-left hover:bg-slate-800/30 transition-colors rounded-lg"
               >
-                <span className="font-semibold text-lg">{faq.question}</span>
+                <span className="font-semibold text-lg pr-4">{faq.question}</span>
                 <ChevronDown
-                  className={`w-5 h-5 text-slate-400 transition-transform ${
+                  className={`w-5 h-5 text-slate-400 transition-transform flex-shrink-0 ${
                     openIndex === index ? 'rotate-180' : ''
                   }`}
                 />
               </button>
               {openIndex === index && (
-                <div className="px-6 pb-6 text-slate-400">{faq.answer}</div>
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-6 pb-6 text-slate-400 leading-relaxed">{faq.answer}</div>
+                </motion.div>
               )}
             </div>
           ))}

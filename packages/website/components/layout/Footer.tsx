@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Github, Twitter, Mail, Linkedin } from 'lucide-react'
 
 const footerLinks = {
@@ -8,17 +9,17 @@ const footerLinks = {
     { name: 'Pricing', href: '/pricing' },
     {
       name: 'Roadmap',
-      href: 'https://github.com/thejands/scriptly/projects',
+      href: 'https://github.com/Mjeevanantham/scriptly/projects',
     },
   ],
   Community: [
     { name: 'Discord', href: 'https://discord.gg/scriptly' },
-    { name: 'GitHub', href: 'https://github.com/thejands/scriptly' },
+    { name: 'GitHub', href: 'https://github.com/Mjeevanantham/scriptly' },
     { name: 'Twitter', href: 'https://twitter.com/scriptly_dev' },
     { name: 'Reddit', href: 'https://reddit.com/r/scriptly' },
   ],
   Resources: [
-    { name: 'Docs', href: 'https://docs.scriptly.dev' },
+    { name: 'Docs', href: 'https://docs.scriptly-ai-ext.vercel.app' },
     { name: 'Blog', href: '/blog' },
     { name: 'Contributing', href: '/contributing' },
     { name: 'Press', href: '/press' },
@@ -28,7 +29,7 @@ const footerLinks = {
     { name: 'Terms', href: '/terms' },
     {
       name: 'License',
-      href: 'https://github.com/thejands/scriptly/blob/main/LICENSE',
+      href: 'https://github.com/Mjeevanantham/scriptly/blob/main/LICENSE',
     },
   ],
 }
@@ -39,7 +40,16 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid md:grid-cols-5 gap-8 mb-8">
           <div>
-            <h3 className="font-bold mb-4">Scriptly</h3>
+            <Link href="/" className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity inline-block">
+              <Image
+                src="/primary_logo.png"
+                alt="Scriptly Logo"
+                width={32}
+                height={32}
+                className="w-8 h-8"
+              />
+              <h3 className="font-bold">Scriptly</h3>
+            </Link>
             <p className="text-sm text-slate-400">
               Free AI IDE built for developers.
             </p>
@@ -79,14 +89,14 @@ export default function Footer() {
               <Twitter className="w-5 h-5" />
             </Link>
             <Link
-              href="https://github.com/thejands/scriptly"
+              href="https://github.com/Mjeevanantham/scriptly"
               target="_blank"
               className="text-slate-400 hover:text-white transition"
             >
               <Github className="w-5 h-5" />
             </Link>
             <Link
-              href="mailto:contact@scriptly.dev"
+              href="mailto:contact@scriptly-ai-ext.vercel.app"
               className="text-slate-400 hover:text-white transition"
             >
               <Mail className="w-5 h-5" />

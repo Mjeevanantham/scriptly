@@ -620,7 +620,7 @@ Thanks!
 
 **Company:** Thejands  
 **Product:** Scriptly  
-**Website:** scriptly.dev (coming)  
+**Website:** scriptly-ai-ext.vercel.app (coming)  
 **GitHub:** github.com/thejands/scriptly  
 **Tagline:** "The free, unified IDE for developers"  
 

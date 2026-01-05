@@ -1,7 +1,7 @@
 export const SITE_NAME = 'Scriptly'
 export const SITE_DESCRIPTION =
   'Free AI IDE. Unified Workspace. Your Privacy. Your Code.'
-export const SITE_URL = 'https://scriptly.dev'
+export const SITE_URL = 'https://scriptly-ai-ext.vercel.app'
 
 export const BRAND_COLORS = {
   primary: '#7C3AED',
