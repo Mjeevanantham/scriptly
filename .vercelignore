@@ -1,3 +1,9 @@
 packages/backend
 packages/extension
-
+packages/website/.next
+packages/website/out
+node_modules
+.turbo
+.git
+.cursor
+ext-logo.png
