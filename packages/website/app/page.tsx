@@ -26,10 +26,10 @@ export const metadata: Metadata = {
     siteName: 'Scriptly',
     images: [
       {
-        url: 'https://scriptly.jeevanantham.site/og-image.png',
+        url: 'https://scriptly.jeevanantham.site/images/scriptly-hero-image.png',
         width: 1200,
-        height: 630,
-        alt: 'Scriptly - Free AI Code Editor',
+        height: 800,
+        alt: 'Scriptly IDE - AI-powered code editor interface with intelligent completion, chat, and unified workspace',
       },
     ],
     locale: 'en_US',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly.jeevanantham.site/og-image.png'],
+    images: ['https://scriptly.jeevanantham.site/images/scriptly-hero-image.png'],
     creator: '@scriptly_dev',
   },
   alternates: {

@@ -26,8 +26,10 @@ export default function Header() {
             alt="Scriptly Logo"
             width={32}
             height={32}
-            className="w-8 h-8"
+            className="w-8 h-8 object-contain"
             priority
+            quality={90}
+            sizes="32px"
           />
           <span className="font-bold text-lg">Scriptly</span>
         </Link>

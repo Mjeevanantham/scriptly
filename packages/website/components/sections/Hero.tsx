@@ -87,9 +87,7 @@ export default function Hero() {
               width={1200}
               height={800}
               priority
-              enableZoom={true}
               enableFullscreen={true}
-              hoverEffect={true}
               className="shadow-2xl"
             />
           </motion.div>

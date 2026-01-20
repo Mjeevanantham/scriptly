@@ -36,10 +36,10 @@ export const metadata: Metadata = {
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
     images: [
       {
-        url: 'https://scriptly.jeevanantham.site/og-image.png',
+        url: 'https://scriptly.jeevanantham.site/images/scriptly-hero-image.png',
         width: 1200,
-        height: 630,
-        alt: 'Scriptly - Free AI Code Editor',
+        height: 800,
+        alt: 'Scriptly IDE - AI-powered code editor interface with intelligent completion, chat, and unified workspace',
       },
     ],
   },
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly.jeevanantham.site/og-image.png'],
+    images: ['https://scriptly.jeevanantham.site/images/scriptly-hero-image.png'],
     creator: '@scriptly_dev',
   },
   robots: {
@@ -62,8 +62,14 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/ext-logo.png',
-    apple: '/ext-logo.png',
+    icon: [
+      { url: '/ext-logo.png', sizes: '32x32', type: 'image/png' },
+      { url: '/ext-logo.png', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/ext-logo.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/ext-logo.png',
   },
   verification: {
     // Add verification codes when available

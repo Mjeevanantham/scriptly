@@ -56,9 +56,7 @@ export default function CTA() {
               alt="Scriptly IDE features showcase - showing advanced coding capabilities and AI-powered assistance"
               width={1200}
               height={800}
-              enableZoom={true}
               enableFullscreen={true}
-              hoverEffect={true}
               className="max-w-full"
             />
           </motion.div>

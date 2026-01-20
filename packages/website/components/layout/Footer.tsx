@@ -46,7 +46,9 @@ export default function Footer() {
                 alt="Scriptly Logo"
                 width={32}
                 height={32}
-                className="w-8 h-8"
+                className="w-8 h-8 object-contain"
+                quality={90}
+                sizes="32px"
               />
               <h3 className="font-bold">Scriptly</h3>
             </Link>
