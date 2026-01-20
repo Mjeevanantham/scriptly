@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** November 18, 2025  
-**Domain:** scriptly-ai-ext.vercel.app (recommended)  
+**Domain:** scriptly.jeevanantham.site (recommended)  
 **Tech Stack:** Next.js + Tailwind CSS + Shadcn/UI  
 
 ---
@@ -73,7 +73,7 @@
 ### Site Map
 
 ```
-scriptly-ai-ext.vercel.app/
+scriptly.jeevanantham.site/
 ├── / (Landing Page - Hero)
 ├── /features (Detailed features)
 ├── /why-scriptly (Comparison & positioning)

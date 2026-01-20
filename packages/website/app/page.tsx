@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    url: 'https://scriptly-ai-ext.vercel.app',
+    url: 'https://scriptly.jeevanantham.site',
     siteName: 'Scriptly',
     images: [
       {
-        url: 'https://scriptly-ai-ext.vercel.app/og-image.png',
+        url: 'https://scriptly.jeevanantham.site/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Scriptly - Free AI Code Editor',
@@ -39,11 +39,11 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly-ai-ext.vercel.app/og-image.png'],
+    images: ['https://scriptly.jeevanantham.site/og-image.png'],
     creator: '@scriptly_dev',
   },
   alternates: {
-    canonical: 'https://scriptly-ai-ext.vercel.app',
+    canonical: 'https://scriptly.jeevanantham.site',
   },
   robots: {
     index: true,
@@ -72,7 +72,7 @@ export default function Home() {
     },
     description:
       'Free, open-source AI IDE with code completion, chat, and unified workspace',
-    url: 'https://scriptly-ai-ext.vercel.app',
+    url: 'https://scriptly.jeevanantham.site',
     author: {
       '@type': 'Organization',
       name: 'Scriptly',

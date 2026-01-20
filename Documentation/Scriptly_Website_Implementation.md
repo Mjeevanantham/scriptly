@@ -136,11 +136,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    url: 'https://scriptly-ai-ext.vercel.app',
+    url: 'https://scriptly.jeevanantham.site',
     siteName: 'Scriptly',
     images: [
       {
-        url: 'https://scriptly-ai-ext.vercel.app/og-image.png',
+        url: 'https://scriptly.jeevanantham.site/og-image.png',
         width: 1200,
         height: 630,
       },
@@ -150,7 +150,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly-ai-ext.vercel.app/og-image.png'],
+    images: ['https://scriptly.jeevanantham.site/og-image.png'],
   },
 }
 
@@ -633,7 +633,7 @@ const footerLinks = {
     { name: 'Reddit', href: 'https://reddit.com/r/scriptly' },
   ],
   Resources: [
-    { name: 'Docs', href: 'https://docs.scriptly-ai-ext.vercel.app' },
+    { name: 'Docs', href: 'https://docs.scriptly.jeevanantham.site' },
     { name: 'Blog', href: '/blog' },
     { name: 'Contributing', href: '/contributing' },
     { name: 'Press', href: '/press' },
@@ -710,7 +710,7 @@ export default function Footer() {
 ```typescript
 export const SITE_NAME = 'Scriptly'
 export const SITE_DESCRIPTION = 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.'
-export const SITE_URL = 'https://scriptly-ai-ext.vercel.app'
+export const SITE_URL = 'https://scriptly.jeevanantham.site'
 
 export const BRAND_COLORS = {
   primary: '#7C3AED',    // Purple
@@ -779,12 +779,12 @@ export default config
 ## Environment Variables (.env.local)
 
 ```
-NEXT_PUBLIC_SITE_URL=https://scriptly-ai-ext.vercel.app
+NEXT_PUBLIC_SITE_URL=https://scriptly.jeevanantham.site
 NEXT_PUBLIC_GA_ID=G_XXXXXXXXX  # Google Analytics ID
 
 # For newsletter/contact form
 SENDGRID_API_KEY=SG_XXXXXXXXX
-CONTACT_EMAIL=contact@scriptly-ai-ext.vercel.app
+CONTACT_EMAIL=contact@scriptly.jeevanantham.site
 
 # For CMS (if using Sanity)
 NEXT_PUBLIC_SANITY_PROJECT_ID=xxxxx
@@ -803,7 +803,7 @@ User-agent: *
 Allow: /
 Disallow: /admin
 
-Sitemap: https://scriptly-ai-ext.vercel.app/sitemap.xml
+Sitemap: https://scriptly.jeevanantham.site/sitemap.xml
 ```
 
 ### sitemap.xml (Auto-generated)
@@ -815,19 +815,19 @@ import type { MetadataRoute } from 'next'
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: 'https://scriptly-ai-ext.vercel.app',
+      url: 'https://scriptly.jeevanantham.site',
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1,
     },
     {
-      url: 'https://scriptly-ai-ext.vercel.app/features',
+      url: 'https://scriptly.jeevanantham.site/features',
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: 'https://scriptly-ai-ext.vercel.app/why-scriptly',
+      url: 'https://scriptly.jeevanantham.site/why-scriptly',
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,

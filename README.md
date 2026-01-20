@@ -218,7 +218,7 @@ No environment variables needed. API keys are stored securely via VS Code's secr
 Create `packages/website/.env.local`:
 
 ```env
-NEXT_PUBLIC_SITE_URL=https://scriptly-ai-ext.vercel.app
+NEXT_PUBLIC_SITE_URL=https://scriptly.jeevanantham.site
 NEXT_PUBLIC_GA_ID=G_XXXXXXXXX  # Optional: Google Analytics
 ```
 

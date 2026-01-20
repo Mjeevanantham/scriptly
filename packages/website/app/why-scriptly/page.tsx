@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Why Scriptly - Compare with Competitors',
     description: 'Why choose Scriptly over other AI code editors',
-    url: 'https://scriptly-ai-ext.vercel.app/why-scriptly',
+    url: 'https://scriptly.jeevanantham.site/why-scriptly',
     siteName: 'Scriptly',
   },
   alternates: {
-    canonical: 'https://scriptly-ai-ext.vercel.app/why-scriptly',
+    canonical: 'https://scriptly.jeevanantham.site/why-scriptly',
   },
 }
 

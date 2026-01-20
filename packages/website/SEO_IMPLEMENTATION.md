@@ -233,15 +233,15 @@ All internal and external links verified:
 
 ## 🌐 URLs to Verify
 
-- Homepage: `https://scriptly-ai-ext.vercel.app`
-- Features: `https://scriptly-ai-ext.vercel.app/features`
-- Why Scriptly: `https://scriptly-ai-ext.vercel.app/why-scriptly`
-- Get Started: `https://scriptly-ai-ext.vercel.app/get-started`
-- Pricing: `https://scriptly-ai-ext.vercel.app/pricing`
-- Community: `https://scriptly-ai-ext.vercel.app/community`
-- Sitemap: `https://scriptly-ai-ext.vercel.app/sitemap.xml`
-- Robots: `https://scriptly-ai-ext.vercel.app/robots.txt`
-- 404: Any invalid URL (e.g., `https://scriptly-ai-ext.vercel.app/invalid-page`)
+- Homepage: `https://scriptly.jeevanantham.site`
+- Features: `https://scriptly.jeevanantham.site/features`
+- Why Scriptly: `https://scriptly.jeevanantham.site/why-scriptly`
+- Get Started: `https://scriptly.jeevanantham.site/get-started`
+- Pricing: `https://scriptly.jeevanantham.site/pricing`
+- Community: `https://scriptly.jeevanantham.site/community`
+- Sitemap: `https://scriptly.jeevanantham.site/sitemap.xml`
+- Robots: `https://scriptly.jeevanantham.site/robots.txt`
+- 404: Any invalid URL (e.g., `https://scriptly.jeevanantham.site/invalid-page`)
 
 All implementations are complete and ready for production! 🎉
 

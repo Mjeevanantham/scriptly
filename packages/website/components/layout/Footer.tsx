@@ -19,7 +19,7 @@ const footerLinks = {
     { name: 'Reddit', href: 'https://reddit.com/r/scriptly' },
   ],
   Resources: [
-    { name: 'Docs', href: 'https://docs.scriptly-ai-ext.vercel.app' },
+    { name: 'Docs', href: 'https://docs.scriptly.jeevanantham.site' },
     { name: 'Blog', href: '/blog' },
     { name: 'Contributing', href: '/contributing' },
     { name: 'Press', href: '/press' },
@@ -96,7 +96,7 @@ export default function Footer() {
               <Github className="w-5 h-5" />
             </Link>
             <Link
-              href="mailto:contact@scriptly-ai-ext.vercel.app"
+              href="mailto:contact@scriptly.jeevanantham.site"
               className="text-slate-400 hover:text-white transition"
             >
               <Mail className="w-5 h-5" />

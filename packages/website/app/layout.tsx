@@ -8,7 +8,7 @@ import { Analytics } from '@vercel/analytics/react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://scriptly-ai-ext.vercel.app'),
+  metadataBase: new URL('https://scriptly.jeevanantham.site'),
   title: {
     default: 'Scriptly - Free AI Code Editor',
     template: '%s | Scriptly',
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://scriptly-ai-ext.vercel.app',
+    url: 'https://scriptly.jeevanantham.site',
     siteName: 'Scriptly',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
     images: [
       {
-        url: 'https://scriptly-ai-ext.vercel.app/og-image.png',
+        url: 'https://scriptly.jeevanantham.site/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Scriptly - Free AI Code Editor',
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Scriptly - Code Without Boundaries',
     description: 'Free AI IDE. Unified Workspace. Your Privacy. Your Code.',
-    images: ['https://scriptly-ai-ext.vercel.app/og-image.png'],
+    images: ['https://scriptly.jeevanantham.site/og-image.png'],
     creator: '@scriptly_dev',
   },
   robots: {

@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Community - Scriptly',
     description: 'Join the Scriptly community',
-    url: 'https://scriptly-ai-ext.vercel.app/community',
+    url: 'https://scriptly.jeevanantham.site/community',
     siteName: 'Scriptly',
   },
   alternates: {
-    canonical: 'https://scriptly-ai-ext.vercel.app/community',
+    canonical: 'https://scriptly.jeevanantham.site/community',
   },
 }
 

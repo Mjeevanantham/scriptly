@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://scriptly-ai-ext.vercel.app'
+  const baseUrl = 'https://scriptly.jeevanantham.site'
   const currentDate = new Date()
 
   return [

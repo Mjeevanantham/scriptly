@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Pricing - Scriptly',
     description: 'Simple, transparent pricing for Scriptly',
-    url: 'https://scriptly-ai-ext.vercel.app/pricing',
+    url: 'https://scriptly.jeevanantham.site/pricing',
     siteName: 'Scriptly',
   },
   alternates: {
-    canonical: 'https://scriptly-ai-ext.vercel.app/pricing',
+    canonical: 'https://scriptly.jeevanantham.site/pricing',
   },
 }
 

@@ -14,7 +14,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/'],
       },
     ],
-    sitemap: 'https://scriptly-ai-ext.vercel.app/sitemap.xml',
+    sitemap: 'https://scriptly.jeevanantham.site/sitemap.xml',
   }
 }
 
