@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+.git/**
 .gitignore
 .prettierrc
 .eslintrc.json
@@ -8,4 +9,20 @@ tsconfig.json
 **/*.map
 **/*.ts
 !out/**/*.js
+node_modules/**/.bin/**
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/*.md
+node_modules/**/*.ts
+node_modules/**/.package.json.swp
+**/.DS_Store
+**/.env
+**/.env.local
+**/dist/**
+**/build/**
+**/.turbo/**
+test/**
+tests/**
+.turboignore
+.npmrc
 

@@ -1,10 +1,24 @@
 {
   "name": "scriptly",
   "displayName": "Scriptly - AI Code Assistant",
-  "description": "Free, unified IDE with AI-powered coding assistance",
-  "version": "0.1.2",
+  "description": "Free, unified IDE with AI-powered coding assistance. Chat with your codebase using AI.",
+  "version": "1.0.0",
   "publisher": "jeeva-dev",
   "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0066cc",
+    "theme": "dark"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "code-chat",
+    "langchain",
+    "openai",
+    "claude",
+    "coding",
+    "refactoring"
+  ],
   "author": "Jeevanantham M <mjeevanantham04@gmail.com>",
   "license": "MIT",
   "repository": {
@@ -18,9 +32,18 @@
   "engines": {
     "vscode": "^1.80.0"
   },
-  "extensionKind": ["ui", "workspace"],
-  "categories": ["Programming Languages", "AI", "Formatters"],
-  "activationEvents": ["onStartupFinished"],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "categories": [
+    "Programming Languages",
+    "AI",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -86,7 +109,12 @@
         "scriptly.llmProvider": {
           "type": "string",
           "default": "openai",
-          "enum": ["openai", "claude", "ollama", "custom"],
+          "enum": [
+            "openai",
+            "claude",
+            "ollama",
+            "custom"
+          ],
           "description": "Default LLM provider"
         },
         "scriptly.modelName": {
@@ -136,4 +164,3 @@
     "@vscode/vsce": "^2.22.0"
   }
 }
-
