@@ -9,8 +9,32 @@ export default function Hero() {
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-10">
       <div className="absolute inset-0 bg-gradient-to-b from-purple-900/20 via-slate-950 to-slate-950" />
 
-      <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-20 right-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl" />
+      <motion.div 
+        className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl"
+        animate={{
+          scale: [1, 1.2, 1],
+          x: [0, 30, 0],
+          y: [0, -20, 0],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+      <motion.div 
+        className="absolute bottom-20 right-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl"
+        animate={{
+          scale: [1, 1.3, 1],
+          x: [0, -40, 0],
+          y: [0, 30, 0],
+        }}
+        transition={{
+          duration: 10,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -39,40 +63,93 @@ export default function Hero() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">
-              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-                <span className="text-green-400 text-lg">✓</span>
-                <span>100% Free & Open-Source</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-                <span className="text-green-400 text-lg">✓</span>
-                <span>50K+ Developers</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-                <span className="text-green-400 text-lg">✓</span>
-                <span>Privacy-First</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-                <span className="text-green-400 text-lg">✓</span>
-                <span>Multi-Model Support</span>
-              </div>
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-all duration-300 hover:translate-x-1 cursor-default group"
+              >
+                <motion.span 
+                  className="text-green-400 text-lg"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.5, delay: 0.8 }}
+                >
+                  ✓
+                </motion.span>
+                <span className="group-hover:text-green-400 transition-colors duration-300">100% Free & Open-Source</span>
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-all duration-300 hover:translate-x-1 cursor-default group"
+              >
+                <motion.span 
+                  className="text-green-400 text-lg"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.5, delay: 1.0 }}
+                >
+                  ✓
+                </motion.span>
+                <span className="group-hover:text-green-400 transition-colors duration-300">50K+ Developers</span>
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-all duration-300 hover:translate-x-1 cursor-default group"
+              >
+                <motion.span 
+                  className="text-green-400 text-lg"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.5, delay: 1.2 }}
+                >
+                  ✓
+                </motion.span>
+                <span className="group-hover:text-green-400 transition-colors duration-300">Privacy-First</span>
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.6 }}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-all duration-300 hover:translate-x-1 cursor-default group"
+              >
+                <motion.span 
+                  className="text-green-400 text-lg"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.5, delay: 1.4 }}
+                >
+                  ✓
+                </motion.span>
+                <span className="group-hover:text-green-400 transition-colors duration-300">Multi-Model Support</span>
+              </motion.div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-6">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.7 }}
+              className="flex flex-col sm:flex-row gap-4 pt-6"
+            >
               <Link
                 href="/get-started"
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-medium transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 text-center"
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-medium transition-all duration-300 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 text-center hover:scale-105 hover:-translate-y-0.5 active:scale-95 relative overflow-hidden group"
               >
-                Download Now
+                <span className="relative z-10">Download Now</span>
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-purple-400 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  initial={false}
+                />
               </Link>
 
               <Link
                 href="https://github.com/Mjeevanantham/scriptly"
                 target="_blank"
-                className="px-6 py-3 border border-slate-700 hover:border-slate-600 hover:bg-slate-900/50 rounded-lg font-medium transition-all text-center"
+                className="px-6 py-3 border border-slate-700 hover:border-slate-600 hover:bg-slate-900/50 rounded-lg font-medium transition-all duration-300 text-center hover:scale-105 hover:-translate-y-0.5 active:scale-95 hover:shadow-lg hover:shadow-slate-700/50"
               >
                 View on GitHub
               </Link>
-            </div>
+            </motion.div>
           </motion.div>
 
           <motion.div

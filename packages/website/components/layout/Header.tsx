@@ -20,18 +20,21 @@ export default function Header() {
   return (
     <header className="fixed top-0 w-full z-50 backdrop-blur-sm bg-slate-950/80 border-b border-slate-800">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <Image
-            src="/ext-logo.png"
-            alt="Scriptly Logo"
-            width={32}
-            height={32}
-            className="w-8 h-8 object-contain"
-            priority
-            quality={90}
-            sizes="32px"
-          />
-          <span className="font-bold text-lg">Scriptly</span>
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-all duration-300 hover:scale-105 group">
+          <div className="relative">
+            <Image
+              src="/ext-logo.png"
+              alt="Scriptly Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8 object-contain transition-transform duration-300 group-hover:rotate-6"
+              priority
+              unoptimized
+            />
+          </div>
+          <span className="font-bold text-lg bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent group-hover:from-purple-300 group-hover:to-blue-300 transition-all duration-300">
+            Scriptly
+          </span>
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
@@ -39,9 +42,10 @@ export default function Header() {
             <Link
               key={item.name}
               href={item.href}
-              className="text-sm text-slate-400 hover:text-white transition"
+              className="text-sm text-slate-400 hover:text-white transition-all duration-300 relative group"
             >
               {item.name}
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-400 to-blue-400 group-hover:w-full transition-all duration-300"></span>
             </Link>
           ))}
         </div>
@@ -51,13 +55,13 @@ export default function Header() {
           <Link
             href="https://github.com/Mjeevanantham/scriptly"
             target="_blank"
-            className="px-4 py-2 text-sm border border-slate-700 rounded-lg hover:border-slate-600 hover:bg-slate-900/50 transition-all"
+            className="px-4 py-2 text-sm border border-slate-700 rounded-lg hover:border-slate-600 hover:bg-slate-900/50 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-slate-700/50"
           >
             GitHub
           </Link>
           <Link
             href="/get-started"
-            className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg transition-all shadow-md shadow-purple-500/20 hover:shadow-purple-500/30"
+            className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg transition-all duration-300 shadow-md shadow-purple-500/20 hover:shadow-purple-500/30 hover:scale-105 hover:-translate-y-0.5"
           >
             Download
           </Link>
