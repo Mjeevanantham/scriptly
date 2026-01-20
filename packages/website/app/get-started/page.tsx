@@ -68,7 +68,7 @@ export default function GetStartedPage() {
               <div>
                 <h3 className="text-xl font-semibold mb-2">Configure API Key (20 seconds)</h3>
                 <p className="text-slate-400 mb-4">
-                  Add your API key (OpenAI/Claude/Ollama) in settings. Press Cmd+Shift+P and select "Configure API Keys".
+                  Add your API key (OpenAI/Claude/Ollama) in settings. Press Cmd+Shift+P and select &quot;Configure API Keys&quot;.
                 </p>
                 <ul className="space-y-2 text-slate-400">
                   <li className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export default function GetStartedPage() {
               <div>
                 <h3 className="text-xl font-semibold mb-2">Start Coding (10 seconds)</h3>
                 <p className="text-slate-400 mb-4">
-                  Press Tab for completions, Cmd+Shift+L for chat. That's it! You're productive.
+                  Press Tab for completions, Cmd+Shift+L for chat. That&apos;s it! You&apos;re productive.
                 </p>
                 <ul className="space-y-2 text-slate-400">
                   <li className="flex items-center gap-2">
