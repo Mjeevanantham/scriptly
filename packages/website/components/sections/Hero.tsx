@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import Image from 'next/image'
+import InteractiveImage from '@/components/common/InteractiveImage'
 
 export default function Hero() {
   return (
@@ -81,19 +81,17 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="relative"
           >
-            <div className="relative rounded-lg border border-slate-700 bg-slate-900/50 backdrop-blur overflow-hidden group shadow-2xl">
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent z-10" />
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
-              <Image
-                src="/images/hero-banner.png"
-                alt="Scriptly IDE - AI-powered code editor interface"
-                width={1200}
-                height={800}
-                priority
-                className="w-full h-auto object-contain"
-                quality={90}
-              />
-            </div>
+            <InteractiveImage
+              src="/images/scriptly-hero-image.png"
+              alt="Scriptly IDE - AI-powered code editor interface with intelligent completion, chat, and unified workspace"
+              width={1200}
+              height={800}
+              priority
+              enableZoom={true}
+              enableFullscreen={true}
+              hoverEffect={true}
+              className="shadow-2xl"
+            />
           </motion.div>
         </div>
 

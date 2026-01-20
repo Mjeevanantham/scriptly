@@ -42,7 +42,7 @@ export default function Footer() {
           <div>
             <Link href="/" className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity inline-block">
               <Image
-                src="/primary_logo.png"
+                src="/ext-logo.png"
                 alt="Scriptly Logo"
                 width={32}
                 height={32}

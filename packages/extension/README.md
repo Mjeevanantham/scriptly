@@ -4,9 +4,8 @@
 
 **Free, unified IDE with AI-powered coding assistance**
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Marketplace](https://img.shields.io/badge/marketplace-jeeva--dev.scriptly-blue.svg)](https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly)
 
 </div>
 
@@ -17,91 +16,62 @@
 - Multi-LLM support (OpenAI, Claude, Ollama, Custom endpoints)
 - Real-time streaming responses
 - Context-aware code analysis
-- Suggestion buttons for quick actions
+- Clickable file paths, URLs, and code blocks
 
 ### 🔧 Code Review & Refactoring
 - Automated bug detection
 - AI-powered refactoring suggestions
-- Code quality metrics
+- Code quality analysis
 - Test generation recommendations
 
 ### 🔍 Smart Research
 - Semantic codebase search
 - Natural language queries
 - Cross-file relationship tracking
-- Documentation generation
+- Workspace code indexing
 
 ### ⚡ Intelligent Formatting
 - Clickable file paths (opens in VS Code with line numbers)
 - Formatted URLs, emails, and git hashes
 - Syntax-highlighted code blocks
 - Error message detection and formatting
-- Stack trace highlighting
 
 ### 🎨 Professional UI
-- Clean, modern interface
-- Mode-specific theming
-- VS Code theme integration
+- Clean, modern vanilla JavaScript interface (no React)
+- VS Code theme integration (light/dark mode)
 - Smooth animations and transitions
+- Multi-page navigation
 
 ## 📦 Installation
 
+### From VS Code Marketplace
 1. Open VS Code
 2. Press `Ctrl+Shift+X` (or `Cmd+Shift+X` on Mac) to open Extensions
 3. Search for "Scriptly"
 4. Click **Install**
 
-Or use the command line:
-
+### From Command Line
 ```bash
 code --install-extension jeeva-dev.scriptly
 ```
 
 ## ⚙️ Quick Start
 
-### Local development (run and debug the extension)
+### 1. Configure API Key
 
-1) From the repo root run the watcher (keeps running):
-```bash
-pnpm run dev:extension
-# or
-pnpm --filter ./packages/extension dev
-```
+After installation:
+1. Click the **Scriptly** icon in the Activity Bar (left sidebar)
+2. Or press `Ctrl+Shift+P` → "Scriptly: Configure API Keys"
+3. Select your LLM provider (OpenAI, Claude, Ollama, Custom)
+4. Enter your API key
+5. Save and start using!
 
-2) Open the `packages/extension` folder in VS Code (or the repo root), then launch the Extension Development Host:
-- Run → **Run Extension** (press **F5**) — this opens a new VS Code window (Extension Development Host) with the extension loaded.
-- If you want a single debug configuration that builds automatically before launch, use the provided `packages/extension/.vscode/launch.json` (it runs a `tsc` preLaunch task).
+### 2. Use Features
 
-3) Configure API keys (in the Extension Development Host):
-- Press `Ctrl+Shift+P` → `Scriptly: Configure API Keys` and follow prompts
-
-4) Use the extension in the Extension Development Host:
-- Click the **Scriptly** icon in the Activity Bar or press `Ctrl+Shift+L`
-- Open the Chat panel and try commands like **Find Bugs**, **Suggest Refactorings**, etc.
-
-> Tip: The TypeScript watcher (`tsc -w`) will not exit (it shows "Watching for file changes"). Keep it running while developing so changes compile automatically.
-
-### Commands (for convenience)
-
-```bash
-# Run extension watcher (from repo root)
-pnpm run dev:extension
-# Start backend in dev (if you need API)
-pnpm run dev:backend
-# Build extension for publishing
-pnpm --filter ./packages/extension package
-```
-
-### Troubleshooting
-
-- If the extension doesn't appear in the Extension Development Host:
-  - Ensure the watcher is running (`pnpm --filter ./packages/extension dev`) or use the launch config which triggers a build.
-  - Reload the window in the Extension Host (`Ctrl+Shift+P` → "Developer: Reload Window").
-  - Check the **Scriptly** output channel (View → Output → select "Scriptly").
-
-- If LLM calls fail, verify API keys and that the backend (if used) is running at `http://localhost:3001`.
-
-If you'd like, I can also add a short "Run locally" checklist into the top-level `README.md` (quick commands and the expected URLs).
+- **Chat**: Click Scriptly icon → Chat tab
+- **Code Review**: Dashboard → Code Review
+- **Research**: Dashboard → Research
+- **Settings**: Dashboard → Settings
 
 ## 🎯 Supported LLM Providers
 
@@ -122,7 +92,7 @@ If you'd like, I can also add a short "Run locally" checklist into the top-level
 
 ### Custom Endpoints
 - Support for any OpenAI-compatible API
-- Configure custom endpoint URL
+- Configure custom endpoint URL and API key
 
 ## 📖 Usage Examples
 
@@ -135,44 +105,90 @@ Explain this function
 ```
 
 ### Code Review Mode
-- Click "Find Bugs" to detect potential issues
+- Select a file → Click "Analyze Code" to detect potential issues
 - Click "Suggest Refactoring" for improvement suggestions
 - Click "Generate Tests" for automated test recommendations
+- Click "Find Bugs" for bug detection
 
 ### Research Mode
-- Search your codebase semantically:
+Search your codebase semantically:
 ```
 Where is the login function implemented?
 Find all API endpoints
 Show me error handling patterns
 ```
 
-## 🎨 Features in Detail
+## 🛠️ Development
 
-### Interactive Formatting
-- **File Paths**: Click any file path in responses to open it in VS Code
-  - Supports line numbers: `file.ts:42`
-  - Supports column numbers: `file.ts:42:10`
-  - Supports ranges: `file.ts:10-20`
+### Prerequisites
+- Node.js >= 18.0.0
+- VS Code >= 1.80.0
 
-- **URLs**: Click URLs to open them in your default browser
-- **Emails**: Click email addresses to open your email client
-- **Git Hashes**: Click commit hashes to view commit details
-- **Code Blocks**: Syntax-highlighted with language detection
+### Setup
+```bash
+cd packages/extension
+npm install
+npm run build
+```
 
-### Context Awareness
-Scriptly analyzes your workspace to provide relevant answers:
-- Automatically scans your codebase
-- Prioritizes important files (package.json, config files, etc.)
-- Excludes logs and build artifacts
-- Includes up to 20 relevant files in context
+### Development Mode
+```bash
+# Watch mode (auto-rebuild on changes)
+npm run dev
 
-### Multi-Mode Interface
-- **Chat**: General conversations and code questions
-- **Code Review**: Bug detection, refactoring, and testing
-- **Research**: Semantic search and documentation
-- **Settings**: API key management and configuration
-- **Deployment**: Deploy to cloud platforms (coming soon)
+# In VS Code:
+# Press F5 to launch Extension Development Host
+```
+
+### Build
+```bash
+npm run build
+```
+
+### Package
+```bash
+npm run package
+```
+
+## 🏗️ Architecture
+
+### Tech Stack
+- **Language**: TypeScript
+- **UI**: Vanilla HTML/CSS/JavaScript (no React)
+- **LLM Integration**: LangChain
+- **IDE Compatibility**: VS Code, Cursor, Windsurf, Antigravity
+
+### File Structure
+```
+src/
+├── extension.ts           # Entry point
+├── types/                 # TypeScript definitions
+├── services/              # Business logic
+│   ├── ConfigService.ts  # API key management
+│   ├── LLMService.ts     # LLM integration
+│   ├── CodeIndexer.ts    # Workspace indexing
+│   ├── SearchService.ts  # Semantic search
+│   ├── RefactorService.ts # Code refactoring
+│   └── TestService.ts    # Test generation
+├── commands/              # VS Code commands
+├── ui/                    # Webview UI
+│   ├── ViewProvider.ts   # Webview provider
+│   ├── pages/            # HTML pages
+│   ├── scripts/          # JavaScript files
+│   └── styles/           # CSS files
+├── utils/                 # Utilities
+└── providers/             # Language providers
+```
+
+## 🔧 Commands
+
+Available via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
+
+- **Scriptly: Open Scriptly Chat** - Open the chat panel (`Ctrl+Shift+L`)
+- **Scriptly: Configure API Keys** - Set up your LLM API keys
+- **Scriptly: Clone Repository** - Clone a Git repository
+- **Scriptly: Show Log File** - View extension logs for debugging
+- **Scriptly: Clear Storage & Reset** - Clear all extension data
 
 ## ⚙️ Configuration
 
@@ -196,15 +212,6 @@ You can configure Scriptly per workspace in `.vscode/settings.json`:
 }
 ```
 
-## 🔧 Commands
-
-Available via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
-
-- **Scriptly: Configure API Keys** - Set up your LLM API keys
-- **Scriptly: Open Scriptly Chat** - Open the chat panel
-- **Scriptly: Focus Chat** - Focus on the chat input
-- **Scriptly: Show Log File** - View extension logs for debugging
-
 ## 🐛 Troubleshooting
 
 ### API Key Not Working
@@ -223,11 +230,6 @@ Available via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
 2. Check internet connection
 3. View extension logs for error messages
 4. Try switching to a different LLM provider
-
-### Performance Issues
-- The extension may include many files (bundling recommended)
-- For better performance, exclude unnecessary files in `.vscodeignore`
-- Reduce context size in settings if token limits are reached
 
 ## 📝 Privacy & Security
 
@@ -258,7 +260,6 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Mjeevanantham/scriptly/issues)
 - **Repository**: [https://github.com/Mjeevanantham/scriptly](https://github.com/Mjeevanantham/scriptly)
-- **Email**: mjeevanantham04@gmail.com
 
 ---
 
@@ -269,4 +270,3 @@ MIT License - See [LICENSE](LICENSE) file for details
 ⭐ Star us on GitHub if you find Scriptly helpful!
 
 </div>
-

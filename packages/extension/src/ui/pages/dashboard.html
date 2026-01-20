@@ -1,0 +1,93 @@
+<div class="page" id="page-dashboard">
+  <div style="padding: 20px;">
+    <h1 style="margin-bottom: 8px;">Scriptly Dashboard</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+      Your AI-powered coding assistant
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('chat')">
+        <h3 style="margin-bottom: 8px;">💬 Chat</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Ask questions about your codebase
+        </p>
+      </div>
+
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('code-review')">
+        <h3 style="margin-bottom: 8px;">🔍 Code Review</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Find bugs and get refactoring suggestions
+        </p>
+      </div>
+
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('research')">
+        <h3 style="margin-bottom: 8px;">📚 Research</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Semantic search across your codebase
+        </p>
+      </div>
+
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('settings')">
+        <h3 style="margin-bottom: 8px;">⚙️ Settings</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Configure API keys and preferences
+        </p>
+      </div>
+
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('history')">
+        <h3 style="margin-bottom: 8px;">📜 History</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          View conversation history
+        </p>
+      </div>
+
+      <div class="card" style="cursor: pointer;" onclick="window.router?.navigate('profiles')">
+        <h3 style="margin-bottom: 8px;">👤 Profiles</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Manage API profiles
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 12px;">Quick Actions</h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="window.router?.navigate('chat')">Start New Chat</button>
+        <button onclick="window.router?.navigate('history')" class="secondary">View History</button>
+        <button onclick="window.router?.navigate('profiles')" class="secondary">Manage Profiles</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h3 style="margin-bottom: 12px;">Status</h3>
+      <div id="status-info">
+        <p style="color: var(--text-secondary);">Checking API configuration...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.initDashboardPage = function() {
+  // Update status
+  const statusInfo = document.getElementById('status-info');
+  
+  if (window.vscode) {
+    // Request auth status
+    window.vscode.postMessage({ command: 'getStatus' });
+    
+    const listener = function(event) {
+      const message = event.data;
+      if (message.command === 'status') {
+        window.removeEventListener('message', listener);
+        if (message.isAuthenticated) {
+          statusInfo.innerHTML = '<p style="color: var(--success-fg);">✓ API Key Configured</p>';
+        } else {
+          statusInfo.innerHTML = '<p style="color: var(--error-fg);">⚠ No API key configured. <a href="#" onclick="event.preventDefault(); window.router?.navigate(\'settings\'); return false;">Configure now</a></p>';
+        }
+      }
+    };
+    window.addEventListener('message', listener);
+  }
+};
+</script>

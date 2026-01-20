@@ -6,7 +6,6 @@ import { ChatOllama } from '@langchain/community/chat_models/ollama'
 import { HumanMessage } from '@langchain/core/messages'
 import { Logger } from '../utils/Logger'
 
-// Using any for MVP - LangChain types are complex and vary by version
 type LLMModel = any
 
 export class LLMService {
@@ -34,40 +33,28 @@ export class LLMService {
         if (!config.apiKey) {
           throw new Error('OpenAI API key not configured')
         }
-        
-        // Log the API key being used (preview only for security)
-        const apiKeyPreview = config.apiKey.substring(0, 10) + '...'
+
         Logger.debug('LLMService', 'Creating ChatOpenAI model', {
           modelName: config.modelName,
           apiKeyLength: config.apiKey.length,
-          apiKeyPreview,
           temperature: config.temperature,
           maxTokens: config.maxTokens,
         })
-        
+
         try {
-          // ChatOpenAI expects openAIApiKey parameter or reads from OPENAI_API_KEY env var
           const modelConfig: any = {
-            openAIApiKey: config.apiKey, // Primary parameter name
-            apiKey: config.apiKey, // Alternative parameter name
+            openAIApiKey: config.apiKey,
+            apiKey: config.apiKey,
             modelName: config.modelName,
             temperature: config.temperature,
-            maxTokens: config.maxTokens,
+            maxTokens: config.maxTokens || 4000,
           }
-          
-          // Also set environment variable as fallback
+
           if (typeof process !== 'undefined' && process.env) {
             process.env.OPENAI_API_KEY = config.apiKey
           }
-          
-          Logger.debug('LLMService', 'ChatOpenAI config prepared', {
-            hasOpenAIApiKey: !!modelConfig.openAIApiKey,
-            hasApiKey: !!modelConfig.apiKey,
-            modelName: modelConfig.modelName,
-          })
-          
+
           const model = new ChatOpenAI(modelConfig)
-          
           Logger.info('LLMService', 'ChatOpenAI model created successfully')
           return model
         } catch (error) {
@@ -80,15 +67,26 @@ export class LLMService {
         if (!config.apiKey) {
           throw new Error('Claude API key not configured')
         }
+
+        Logger.debug('LLMService', 'Creating ChatAnthropic model', {
+          modelName: config.modelName,
+          apiKeyLength: config.apiKey.length,
+        })
+
         return new ChatAnthropic({
           apiKey: config.apiKey,
           modelName: config.modelName,
           temperature: config.temperature,
-          maxTokens: config.maxTokens,
+          maxTokens: config.maxTokens || 4000,
         } as any)
       }
 
       case 'ollama': {
+        Logger.debug('LLMService', 'Creating ChatOllama model', {
+          baseURL: config.baseURL || 'http://localhost:11434',
+          modelName: config.modelName || 'llama2',
+        })
+
         return new ChatOllama({
           baseUrl: config.baseURL || 'http://localhost:11434',
           model: config.modelName || 'llama2',
@@ -100,13 +98,13 @@ export class LLMService {
         if (!config.baseURL || !config.apiKey) {
           throw new Error('Custom endpoint requires baseURL and apiKey')
         }
-        // OpenAI-compatible endpoint
+
         Logger.debug('LLMService', 'Creating ChatOpenAI model for custom endpoint', {
           baseURL: config.baseURL,
           modelName: config.modelName,
           apiKeyLength: config.apiKey.length,
         })
-        
+
         try {
           const modelConfig: any = {
             openAIApiKey: config.apiKey,
@@ -116,12 +114,13 @@ export class LLMService {
             },
             modelName: config.modelName,
             temperature: config.temperature,
+            maxTokens: config.maxTokens || 4000,
           }
-          
+
           if (typeof process !== 'undefined' && process.env) {
             process.env.OPENAI_API_KEY = config.apiKey
           }
-          
+
           const model = new ChatOpenAI(modelConfig)
           Logger.info('LLMService', 'ChatOpenAI model created successfully for custom endpoint')
           return model
@@ -136,235 +135,73 @@ export class LLMService {
     }
   }
 
-  async generateCompletion(
-    request: CompletionRequest
-  ): Promise<string> {
-    Logger.info('LLMService', 'Generating completion', {
-      language: request.language,
-      filename: request.filename,
-      codeLength: request.code.length,
-      cursorPosition: request.cursorPosition,
-    })
-    
-    const cacheKey = this.getCacheKey(request.code, request.cursorPosition)
-    if (this.cache.has(cacheKey)) {
-      Logger.debug('LLMService', 'Completion cache hit', { cacheKey })
-      return this.cache.get(cacheKey)!
-    }
-
-    Logger.debug('LLMService', 'Cache miss, generating new completion')
-    const prompt = this.buildCompletionPrompt(request)
-    Logger.debug('LLMService', 'Completion prompt built', { promptLength: prompt.length })
-    
-    const model = await this.getModel()
-
+  async generateCompletion(request: CompletionRequest): Promise<string> {
     try {
-      // Use HumanMessage class from LangChain core
-      const messages = [new HumanMessage(prompt)]
-      Logger.debug('LLMService', 'Invoking model for completion')
-      const response = await model.invoke(messages)
+      const model = await this.getModel()
+      const prompt = `Complete the following code:\n\n${request.code}\n\nProvide only the completion, no explanations.`
 
-      const suggestion = response.content as string
-      Logger.info('LLMService', 'Completion generated successfully', {
-        suggestionLength: suggestion.length,
-        preview: suggestion.substring(0, 50) + '...',
+      const response = await model.invoke([new HumanMessage(prompt)])
+      const completion = typeof response.content === 'string' ? response.content : String(response.content)
+
+      Logger.debug('LLMService', 'Completion generated', {
+        length: completion.length,
+        provider: (await this.configService.getLLMConfig()).provider,
       })
-      
-      this.cache.set(cacheKey, suggestion)
-      Logger.debug('LLMService', 'Completion cached')
-      return suggestion
+
+      return completion
     } catch (error) {
-      Logger.error('LLMService', 'Completion generation failed', error)
+      Logger.error('LLMService', 'Failed to generate completion', error)
       throw error
     }
   }
 
-  async *streamCompletion(
-    request: CompletionRequest
-  ): AsyncIterable<string> {
-    Logger.info('LLMService', 'Streaming completion', {
-      language: request.language,
-      filename: request.filename,
-      codeLength: request.code.length,
-    })
-    
-    const prompt = this.buildCompletionPrompt(request)
-    Logger.debug('LLMService', 'Completion prompt built for streaming', { promptLength: prompt.length })
-    
-    const model = await this.getModel()
-
+  async *streamChat(request: ChatRequest): AsyncGenerator<string, void, unknown> {
     try {
-      // Use HumanMessage class from LangChain core
-      const messages = [new HumanMessage(prompt)]
-      Logger.debug('LLMService', 'Starting completion stream')
-      const stream = await model.stream(messages)
+      const model = await this.getModel()
+      const config = await this.configService.getLLMConfig()
 
-      let chunkCount = 0
-      for await (const chunk of stream) {
-        if (chunk.content) {
-          chunkCount++
-          yield chunk.content as string
-        }
+      // Build context
+      let contextMessage = request.message
+      if (request.fileContext) {
+        contextMessage = `File context:\n${request.fileContext}\n\nUser question: ${request.message}`
       }
-      
-      Logger.info('LLMService', 'Completion stream completed', { chunkCount })
-    } catch (error) {
-      Logger.error('LLMService', 'Streaming completion failed', error)
-      throw error
-    }
-  }
+      if (request.selectedCode) {
+        contextMessage += `\n\nSelected code:\n${request.selectedCode}`
+      }
 
-  async generateChatResponse(request: ChatRequest): Promise<string> {
-    const prompt = this.buildChatPrompt(request)
-    const model = await this.getModel()
-
-    try {
-      Logger.debug('LLMService', 'Generating chat response', {
-        promptLength: prompt.length,
+      Logger.debug('LLMService', 'Streaming chat response', {
+        provider: config.provider,
+        modelName: config.modelName,
+        messageLength: request.message.length,
       })
 
-      // Use HumanMessage class from LangChain core
-      const messages = [new HumanMessage(prompt)]
-      const response = await model.invoke(messages)
+      // Stream response
+      const stream = await model.stream([new HumanMessage(contextMessage)])
 
-      Logger.debug('LLMService', 'Chat response generated successfully')
-      return response.content as string
-    } catch (error) {
-      Logger.error('LLMService', 'Chat response generation failed', error)
-      throw error
-    }
-  }
-
-  async *streamChatResponse(
-    request: ChatRequest
-  ): AsyncIterable<string> {
-    Logger.info('LLMService', 'Streaming chat response', {
-      messageLength: request.message.length,
-      hasFileContext: !!request.fileContext,
-      fileContextLength: request.fileContext?.length || 0,
-      hasSelectedCode: !!request.selectedCode,
-      selectedCodeLength: request.selectedCode?.length || 0,
-      conversationId: request.conversationId,
-    })
-    
-    const prompt = this.buildChatPrompt(request)
-    Logger.debug('LLMService', 'Chat prompt built', {
-      promptLength: prompt.length,
-      promptPreview: prompt.substring(0, 200) + '...',
-    })
-    
-    const model = await this.getModel()
-
-    try {
-      // Use HumanMessage class from LangChain core
-      const messages = [new HumanMessage(prompt)]
-      Logger.debug('LLMService', 'Starting chat response stream')
-      const stream = await model.stream(messages)
-
-      let chunkCount = 0
-      let totalContentLength = 0
       for await (const chunk of stream) {
-        if (chunk.content) {
-          chunkCount++
-          const content = chunk.content as string
-          totalContentLength += content.length
+        const content = typeof chunk.content === 'string' ? chunk.content : String(chunk.content)
+        if (content) {
           yield content
         }
       }
-      
-      Logger.info('LLMService', 'Chat response stream completed', {
-        chunkCount,
-        totalContentLength,
-      })
+
+      Logger.debug('LLMService', 'Chat stream completed')
     } catch (error) {
-      Logger.error('LLMService', 'Streaming chat response failed', error)
+      Logger.error('LLMService', 'Failed to stream chat', error)
       throw error
     }
   }
 
-  async switchModel(config: LLMConfig): Promise<void> {
-    this.currentModel = null
-    this.currentModel = await this.createModel(config)
-  }
-
-  private buildCompletionPrompt(request: CompletionRequest): string {
-    return `You are an expert developer. Given the code context below, predict the NEXT LINE(S) of code that should logically follow.
-
-Return ONLY the code to be inserted, NO explanation, NO markdown, NO code blocks.
-
-File: ${request.filename}
-Language: ${request.language}
-
----CODE CONTEXT---
-${request.code}
----END CONTEXT---
-
-Predict the next lines:`
-  }
-
-  private buildChatPrompt(request: ChatRequest): string {
-    let systemPrompt = `You are an expert codebase analyst. Analyze the codebase and provide concise answers.
-
-IMPORTANT:
-- Keep responses SHORT (2-4 sentences max)
-- Use bullet points for multiple items
-- Focus on structure, patterns, and key functionality
-- Format code blocks with proper language tags
-- Be direct and actionable`
-
-    let prompt = systemPrompt
-
-    if (request.fileContext) {
-      // Truncate context if it's too long (with some buffer for the rest of the prompt)
-      const maxContextLength = 12000 // Leave room for system prompt and user message
-      const truncatedContext = request.fileContext.length > maxContextLength
-        ? request.fileContext.substring(0, maxContextLength) + '\n\n[... context truncated ...]'
-        : request.fileContext
-      
-      prompt += `\n\n--- CODEBASE ---\n${truncatedContext}\n--- END CODEBASE ---\n\n`
+  async generateChat(request: ChatRequest): Promise<string> {
+    let fullResponse = ''
+    for await (const chunk of this.streamChat(request)) {
+      fullResponse += chunk
     }
-
-    prompt += `Question: ${request.message}`
-
-    if (request.selectedCode) {
-      // Limit selected code too
-      const maxSelectionLength = 2000
-      const truncatedSelection = request.selectedCode.length > maxSelectionLength
-        ? request.selectedCode.substring(0, maxSelectionLength) + '\n[... truncated ...]'
-        : request.selectedCode
-      
-      prompt += `\n\n--- SELECTED ---\n\`\`\`\n${truncatedSelection}\n\`\`\`\n--- END ---`
-    }
-
-    Logger.debug('LLMService', 'Built chat prompt', {
-      totalLength: prompt.length,
-      hasContext: !!request.fileContext,
-      contextLength: request.fileContext?.length || 0,
-      messageLength: request.message.length,
-    })
-
-    return prompt
+    return fullResponse
   }
 
-  private getCacheKey(code: string, position: number): string {
-    // Simple hash-based cache key
-    const hash = code.slice(Math.max(0, position - 100), position + 50)
-    return `${hash}_${position}`
-  }
-
-  invalidateCache(): void {
-    this.cache.clear()
-  }
-
-  // Invalidate the current model (useful when API key changes)
-  invalidateModel(): void {
-    Logger.info('LLMService', 'Invalidating model and cache', {
-      hadModel: !!this.currentModel,
-      cacheSize: this.cache.size,
-    })
+  resetModel(): void {
     this.currentModel = null
-    this.cache.clear()
-    Logger.debug('LLMService', 'Model and cache invalidated')
+    Logger.debug('LLMService', 'Model reset')
   }
 }
-

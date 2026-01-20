@@ -1,0 +1,183 @@
+<div class="page" id="page-login">
+  <div style="max-width: 500px; margin: 0 auto; padding-top: 40px;">
+    <h1 style="text-align: center; margin-bottom: 8px;">Welcome to Scriptly</h1>
+    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 32px;">
+      AI-powered code assistant for VS Code
+    </p>
+
+    <div class="card">
+      <h3 style="margin-bottom: 16px;">Configure API Key</h3>
+      
+      <div class="form-group">
+        <label class="form-label" for="provider-select">LLM Provider</label>
+        <select id="provider-select" class="form-control">
+          <option value="openai">OpenAI (GPT-4, GPT-3.5)</option>
+          <option value="claude">Anthropic Claude</option>
+          <option value="ollama">Ollama (Local)</option>
+          <option value="custom">Custom Endpoint</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="api-key-group">
+        <label class="form-label" for="api-key-input">API Key</label>
+        <input type="password" id="api-key-input" class="form-control" placeholder="Enter your API key" />
+        <div class="form-help">
+          <a href="#" id="api-key-link" target="_blank">Get API key</a>
+        </div>
+      </div>
+
+      <div class="form-group" id="base-url-group" style="display: none;">
+        <label class="form-label" for="base-url-input">Base URL</label>
+        <input type="text" id="base-url-input" class="form-control" placeholder="https://api.example.com" />
+      </div>
+
+      <div id="login-error" class="message-error" style="display: none; margin-bottom: 16px;"></div>
+
+      <button id="save-api-key-btn" style="width: 100%; margin-bottom: 12px;">Save API Key</button>
+      <button id="skip-btn" class="secondary" style="width: 100%;">Skip for Now</button>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h4 style="margin-bottom: 8px;">Quick Links</h4>
+      <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary);">
+        <li><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a></li>
+        <li><a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a></li>
+        <li><a href="https://ollama.ai/" target="_blank">Install Ollama</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const providerSelect = document.getElementById('provider-select');
+  const apiKeyInput = document.getElementById('api-key-input');
+  const baseUrlInput = document.getElementById('base-url-input');
+  const baseUrlGroup = document.getElementById('base-url-group');
+  const apiKeyLink = document.getElementById('api-key-link');
+  const saveBtn = document.getElementById('save-api-key-btn');
+  const skipBtn = document.getElementById('skip-btn');
+  const errorDiv = document.getElementById('login-error');
+
+  // Update API key link based on provider
+  function updateApiKeyLink() {
+    const provider = providerSelect.value;
+    if (provider === 'openai') {
+      apiKeyLink.href = 'https://platform.openai.com/api-keys';
+      apiKeyLink.textContent = 'Get OpenAI API key';
+    } else if (provider === 'claude') {
+      apiKeyLink.href = 'https://console.anthropic.com/';
+      apiKeyLink.textContent = 'Get Claude API key';
+    } else if (provider === 'ollama') {
+      apiKeyLink.href = 'https://ollama.ai/';
+      apiKeyLink.textContent = 'Install Ollama';
+      apiKeyInput.placeholder = 'Not required for Ollama (leave empty)';
+    } else {
+      apiKeyLink.href = '#';
+      apiKeyLink.textContent = 'Configure your custom endpoint';
+      apiKeyInput.placeholder = 'Enter API key';
+    }
+  }
+
+  // Show/hide base URL field
+  providerSelect.addEventListener('change', function() {
+    updateApiKeyLink();
+    if (providerSelect.value === 'custom' || providerSelect.value === 'ollama') {
+      baseUrlGroup.style.display = 'block';
+      if (providerSelect.value === 'ollama') {
+        baseUrlInput.value = 'http://localhost:11434';
+        baseUrlInput.placeholder = 'http://localhost:11434';
+      } else {
+        baseUrlInput.value = '';
+        baseUrlInput.placeholder = 'https://api.example.com';
+      }
+    } else {
+      baseUrlGroup.style.display = 'none';
+    }
+  });
+
+  updateApiKeyLink();
+
+  // Save API key
+  saveBtn.addEventListener('click', async function() {
+    const provider = providerSelect.value;
+    const apiKey = apiKeyInput.value.trim();
+    const baseUrl = baseUrlInput.value.trim();
+
+    if (!apiKey && provider !== 'ollama') {
+      errorDiv.textContent = 'Please enter an API key';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if ((provider === 'custom' || provider === 'ollama') && !baseUrl) {
+      errorDiv.textContent = 'Please enter a base URL';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    errorDiv.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    if (window.vscode) {
+      window.vscode.postMessage({
+        command: 'configureAPI',
+        provider: provider,
+        apiKey: apiKey || 'none', // Ollama doesn't need API key
+        baseURL: baseUrl || undefined,
+      });
+
+      // Listen for response
+      const listener = function(event) {
+        const message = event.data;
+        if (message.command === 'apiKeyConfigured') {
+          window.removeEventListener('message', listener);
+          saveBtn.disabled = false;
+          
+          if (message.success) {
+            saveBtn.textContent = 'Saved!';
+            setTimeout(() => {
+              if (window.router && typeof window.router.navigate === 'function') {
+                window.router.navigate('dashboard');
+              } else {
+                // Fallback: try again after a short delay
+                setTimeout(() => {
+                  if (window.router && typeof window.router.navigate === 'function') {
+                    window.router.navigate('dashboard');
+                  }
+                }, 200);
+              }
+            }, 500);
+          } else {
+            saveBtn.textContent = 'Save API Key';
+            errorDiv.textContent = message.error || 'Failed to validate API key';
+            errorDiv.style.display = 'block';
+          }
+        }
+      };
+      window.addEventListener('message', listener);
+    }
+  });
+
+  // Skip button
+  skipBtn.addEventListener('click', function() {
+    if (window.router && typeof window.router.navigate === 'function') {
+      window.router.navigate('dashboard');
+    } else {
+      // Fallback: try again after a short delay
+      setTimeout(() => {
+        if (window.router && typeof window.router.navigate === 'function') {
+          window.router.navigate('dashboard');
+        }
+      }, 200);
+    }
+  });
+
+  // Initialize login page
+  window.initLoginPage = function() {
+    // Focus on API key input
+    apiKeyInput.focus();
+  };
+})();
+</script>

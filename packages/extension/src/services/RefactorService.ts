@@ -1,62 +1,86 @@
-import * as vscode from 'vscode'
 import { LLMService } from './LLMService'
 import { Logger } from '../utils/Logger'
-import type { RefactorSuggestion } from '../types/ui'
+import * as vscode from 'vscode'
 
 export class RefactorService {
-  constructor(private readonly llmService: LLMService) {}
+  constructor(private llmService: LLMService) {}
 
-  async analyzeCode(filePath: string, code: string): Promise<RefactorSuggestion[]> {
-    Logger.debug('RefactorService', 'Analyzing code for refactoring', { filePath })
-
+  async analyzeCode(uri: vscode.Uri): Promise<string> {
     try {
-      // Use LLM to analyze code and suggest refactorings
-      const prompt = `Analyze the following code and suggest refactoring improvements. Return suggestions in JSON format.
+      const document = await vscode.workspace.openTextDocument(uri)
+      const code = document.getText()
+      const language = document.languageId
 
-Code:
-\`\`\`
-${code.substring(0, 5000)}
-\`\`\`
-
-Suggest improvements for code quality, performance, maintainability, and best practices.`
-
-      // Placeholder - would use LLMService to generate suggestions
-      const suggestions: RefactorSuggestion[] = []
-
-      Logger.debug('RefactorService', 'Code analysis complete', {
-        filePath,
-        suggestionCount: suggestions.length,
+      Logger.debug('RefactorService', 'Analyzing code', {
+        file: uri.fsPath,
+        language,
+        codeLength: code.length,
       })
 
-      return suggestions
+      const prompt = `Analyze the following ${language} code and identify:
+1. Potential bugs or issues
+2. Code smells and anti-patterns
+3. Performance improvements
+4. Security concerns
+5. Best practices violations
+
+Code:
+\`\`\`${language}
+${code}
+\`\`\`
+
+Provide a detailed analysis with specific recommendations.`
+
+      const response = await this.llmService.generateChat({
+        message: prompt,
+        fileContext: code,
+        selectedCode: '',
+        conversationId: 'refactor-' + Date.now(),
+      })
+
+      return response
     } catch (error) {
-      Logger.error('RefactorService', 'Code analysis failed', error)
-      return []
+      Logger.error('RefactorService', 'Error analyzing code', error)
+      throw error
     }
   }
 
-  async findBugs(filePath: string, code: string): Promise<any[]> {
-    Logger.debug('RefactorService', 'Finding bugs', { filePath })
-
+  async suggestRefactoring(uri: vscode.Uri): Promise<string> {
     try {
-      // Placeholder for bug detection
-      return []
-    } catch (error) {
-      Logger.error('RefactorService', 'Bug detection failed', error)
-      return []
-    }
-  }
+      const document = await vscode.workspace.openTextDocument(uri)
+      const code = document.getText()
+      const language = document.languageId
 
-  async generateTests(filePath: string, code: string): Promise<string> {
-    Logger.debug('RefactorService', 'Generating tests', { filePath })
+      Logger.debug('RefactorService', 'Suggesting refactoring', {
+        file: uri.fsPath,
+        language,
+      })
 
-    try {
-      // Placeholder for test generation
-      return ''
+      const prompt = `Suggest refactoring improvements for the following ${language} code.
+Provide specific refactored code examples with explanations.
+
+Original code:
+\`\`\`${language}
+${code}
+\`\`\`
+
+Focus on:
+- Improving readability
+- Reducing complexity
+- Following best practices
+- Maintaining functionality`
+
+      const response = await this.llmService.generateChat({
+        message: prompt,
+        fileContext: code,
+        selectedCode: '',
+        conversationId: 'refactor-' + Date.now(),
+      })
+
+      return response
     } catch (error) {
-      Logger.error('RefactorService', 'Test generation failed', error)
-      return ''
+      Logger.error('RefactorService', 'Error suggesting refactoring', error)
+      throw error
     }
   }
 }
-

@@ -1,96 +1,87 @@
-import * as vscode from 'vscode'
-import * as fs from 'fs'
-import * as path from 'path'
+import { CodeIndexer } from './CodeIndexer'
+import { LLMService } from './LLMService'
 import { Logger } from '../utils/Logger'
 
-export interface SearchResult {
-  file: string
-  title: string
-  content: string
-  description: string
-  lineNumber?: number
-  relevance: number
-}
-
 export class SearchService {
-  constructor(private readonly workspacePath: string) {}
+  constructor(
+    private codeIndexer: CodeIndexer,
+    private llmService: LLMService
+  ) {}
 
-  async searchCodebase(query: string): Promise<SearchResult[]> {
-    Logger.debug('SearchService', 'Starting codebase search', { query })
-
+  async semanticSearch(query: string): Promise<string> {
     try {
-      const results: SearchResult[] = []
-      const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs']
-      const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'out']
+      Logger.info('SearchService', 'Performing semantic search', { query })
 
-      const walkDir = (dir: string): void => {
-        try {
-          const entries = fs.readdirSync(dir, { withFileTypes: true })
-
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name)
-
-            if (entry.isDirectory()) {
-              if (!ignoreDirs.includes(entry.name)) {
-                walkDir(fullPath)
-              }
-            } else if (entry.isFile()) {
-              const ext = path.extname(entry.name).toLowerCase()
-              if (codeExtensions.includes(ext)) {
-                try {
-                  const content = fs.readFileSync(fullPath, 'utf8')
-                  if (content.toLowerCase().includes(query.toLowerCase())) {
-                    const relativePath = path.relative(this.workspacePath, fullPath)
-                    results.push({
-                      file: relativePath,
-                      title: entry.name,
-                      content: content.substring(0, 200),
-                      description: `Found in ${relativePath}`,
-                      relevance: this.calculateRelevance(content, query),
-                    })
-                  }
-                } catch {
-                  // Skip unreadable files
-                }
-              }
-            }
-          }
-        } catch {
-          // Skip inaccessible directories
-        }
+      // First, do a basic text search
+      const chunks = await this.codeIndexer.search(query)
+      
+      if (chunks.length === 0) {
+        return `No results found for: "${query}"`
       }
 
-      walkDir(this.workspacePath)
+      // Build context from top results
+      const context = chunks
+        .slice(0, 10)
+        .map(
+          (chunk) =>
+            `File: ${chunk.filePath}:${chunk.startLine}\n\`\`\`${chunk.language}\n${chunk.content}\n\`\`\``
+        )
+        .join('\n\n')
 
-      // Sort by relevance
-      results.sort((a, b) => b.relevance - a.relevance)
+      // Use LLM to provide semantic search results
+      const prompt = `Based on the following codebase context, answer this query: "${query}"
 
-      return results.slice(0, 10) // Return top 10 results
+Context from codebase:
+${context}
+
+Provide:
+1. A direct answer to the query
+2. Relevant code locations
+3. Explanation of how the code relates to the query
+
+If the query asks where something is implemented, provide file paths and line numbers.`
+
+      const response = await this.llmService.generateChat({
+        message: prompt,
+        fileContext: context,
+        selectedCode: '',
+        conversationId: 'search-' + Date.now(),
+      })
+
+      return response
     } catch (error) {
-      Logger.error('SearchService', 'Search failed', error)
-      return []
+      Logger.error('SearchService', 'Error performing semantic search', error)
+      throw error
     }
   }
 
-  private calculateRelevance(content: string, query: string): number {
-    const lowerContent = content.toLowerCase()
-    const lowerQuery = query.toLowerCase()
-    let score = 0
-
-    // Exact match
-    if (lowerContent.includes(lowerQuery)) {
-      score += 10
-    }
-
-    // Word matches
-    const queryWords = lowerQuery.split(/\s+/)
-    queryWords.forEach((word) => {
-      if (lowerContent.includes(word)) {
-        score += 2
+  async findReferences(query: string): Promise<string> {
+    try {
+      const chunks = await this.codeIndexer.search(query)
+      
+      if (chunks.length === 0) {
+        return `No references found for: "${query}"`
       }
-    })
 
-    return score
+      // Group by file
+      const byFile: Record<string, number[]> = {}
+      for (const chunk of chunks) {
+        if (!byFile[chunk.filePath]) {
+          byFile[chunk.filePath] = []
+        }
+        byFile[chunk.filePath].push(chunk.startLine)
+      }
+
+      // Format results
+      let result = `Found ${chunks.length} reference(s) for "${query}":\n\n`
+      for (const [file, lines] of Object.entries(byFile)) {
+        result += `${file}:${lines.join(', ')}\n`
+      }
+
+      return result
+    } catch (error) {
+      Logger.error('SearchService', 'Error finding references', error)
+      throw error
+    }
   }
 }
-

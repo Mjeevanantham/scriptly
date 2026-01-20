@@ -62,8 +62,8 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/primary_logo.png',
-    apple: '/primary_logo.png',
+    icon: '/ext-logo.png',
+    apple: '/ext-logo.png',
   },
   verification: {
     // Add verification codes when available

@@ -63,4 +63,3 @@ export interface CodeChunk {
   hash: string
   embedding?: number[]
 }
-

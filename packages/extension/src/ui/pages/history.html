@@ -1,0 +1,86 @@
+<div class="page" id="page-history">
+  <div style="padding: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <button onclick="window.router?.navigate('dashboard')" class="secondary" style="display: flex; align-items: center; gap: 4px;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;">
+          <path d="M11 8L6 13L5.293 12.293L9.586 8L5.293 3.707L6 3L11 8Z"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    <h1 style="margin-bottom: 8px;">History</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+      View your conversation and interaction history
+    </p>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">Conversations</h3>
+        <button id="clear-history-btn" class="secondary">Clear History</button>
+      </div>
+
+      <div id="history-list">
+        <p style="color: var(--text-secondary); text-align: center; padding: 40px 0;">
+          No history yet. Start a conversation to see it here.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.initHistoryPage = function() {
+  const historyList = document.getElementById('history-list');
+  const clearBtn = document.getElementById('clear-history-btn');
+
+  // Load history
+  if (window.vscode) {
+    window.vscode.postMessage({ command: 'getHistory' });
+
+    const listener = function(event) {
+      const message = event.data;
+      if (message.command === 'history') {
+        window.removeEventListener('message', listener);
+        
+        if (message.history && message.history.length > 0) {
+          historyList.innerHTML = message.history.map(item => {
+            const date = new Date(item.timestamp).toLocaleString();
+            return `
+              <div class="card" style="margin-bottom: 12px; cursor: pointer;" onclick="loadHistoryItem('${item.id}')">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                  <div style="flex: 1;">
+                    <p style="margin: 0 0 8px 0; font-weight: 500;">${MessageFormatter.escapeHtml(item.preview || 'Conversation')}</p>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.875rem;">${date}</p>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          historyList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px 0;">No history yet. Start a conversation to see it here.</p>';
+        }
+      }
+    };
+    window.addEventListener('message', listener);
+  }
+
+  clearBtn.addEventListener('click', function() {
+    if (confirm('Clear all history?')) {
+      if (window.vscode) {
+        window.vscode.postMessage({ command: 'clearHistory' });
+        historyList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px 0;">No history yet. Start a conversation to see it here.</p>';
+      }
+    }
+  });
+
+  window.loadHistoryItem = function(id) {
+    // Navigate to chat and load history item
+    if (window.router) {
+      window.router.navigate('chat');
+    }
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'loadHistoryItem', id: id });
+    }
+  };
+};
+</script>

@@ -1,0 +1,171 @@
+<div class="page" id="page-chat">
+  <div style="display: flex; flex-direction: column; height: 100%;">
+    <!-- Chat Messages Area -->
+    <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+      <div class="card" style="text-align: center; padding: 24px;">
+        <h3 style="margin-bottom: 8px;">💬 Start a Conversation</h3>
+        <p style="color: var(--text-secondary); margin: 0;">
+          Ask questions about your codebase, get help with code, or discuss your project.
+        </p>
+      </div>
+    </div>
+
+    <!-- Chat Input Area -->
+    <div style="border-top: 1px solid var(--border-color); padding: 16px; background-color: var(--bg-secondary);">
+      <div id="chat-error" class="message-error" style="display: none; margin-bottom: 12px;"></div>
+      
+      <div style="display: flex; gap: 8px; align-items: flex-end;">
+        <textarea 
+          id="chat-input" 
+          placeholder="Type your message... (Shift+Enter for new line, Enter to send)"
+          style="flex: 1; min-height: 60px; max-height: 200px; resize: vertical; font-family: inherit;"
+          rows="2"
+        ></textarea>
+        <button id="send-btn" style="height: 60px; padding: 0 24px; white-space: nowrap;">Send</button>
+      </div>
+      
+      <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+        <button class="secondary" onclick="window.router?.navigate('dashboard')" style="font-size: 0.875rem;">← Dashboard</button>
+        <button class="secondary" onclick="clearChat()" style="font-size: 0.875rem;">Clear Chat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const messagesContainer = document.getElementById('chat-messages');
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('send-btn');
+  const errorDiv = document.getElementById('chat-error');
+  let isLoading = false;
+
+  // Load formatter script
+  if (typeof MessageFormatter === 'undefined') {
+    console.error('MessageFormatter not loaded');
+  }
+
+  // Send message
+  function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text || isLoading) {
+      return;
+    }
+
+    // Clear error
+    errorDiv.style.display = 'none';
+
+    // Disable input
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    isLoading = true;
+    sendBtn.textContent = 'Sending...';
+
+    // Add user message
+    addMessage('user', text);
+
+    // Clear input
+    chatInput.value = '';
+
+    // Add assistant message placeholder
+    const assistantMsgId = 'msg-' + Date.now();
+    const assistantMsg = document.createElement('div');
+    assistantMsg.id = assistantMsgId;
+    assistantMsg.className = 'message assistant';
+    assistantMsg.innerHTML = '<div class="message-content" style="padding: 12px; background-color: var(--bg-tertiary); border-radius: 6px;"><div class="loader" style="display: inline-block; margin-right: 8px;"></div>Thinking...</div>';
+    messagesContainer.appendChild(assistantMsg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Send to extension
+    if (window.vscode) {
+      window.vscode.postMessage({
+        command: 'sendMessage',
+        text: text,
+      });
+
+      let fullResponse = '';
+      const listener = function(event) {
+        const message = event.data;
+        if (message.command === 'streamChunk') {
+          fullResponse += message.chunk;
+          const contentEl = assistantMsg.querySelector('.message-content');
+          if (contentEl) {
+            const formatted = MessageFormatter.formatMessage(fullResponse, {
+              enableClickHandlers: true,
+              workspacePath: window.workspacePath || '',
+            });
+            contentEl.innerHTML = formatted;
+            MessageFormatter.attachClickHandlers(contentEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        } else if (message.command === 'streamComplete') {
+          window.removeEventListener('message', listener);
+          chatInput.disabled = false;
+          sendBtn.disabled = false;
+          isLoading = false;
+          sendBtn.textContent = 'Send';
+          chatInput.focus();
+        } else if (message.command === 'error') {
+          window.removeEventListener('message', listener);
+          chatInput.disabled = false;
+          sendBtn.disabled = false;
+          isLoading = false;
+          sendBtn.textContent = 'Send';
+          assistantMsg.remove();
+          errorDiv.textContent = message.error || 'An error occurred';
+          errorDiv.style.display = 'block';
+        }
+      };
+      window.addEventListener('message', listener);
+    }
+  }
+
+  // Add message to chat
+  function addMessage(role, content) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+    
+    if (role === 'user') {
+      messageDiv.style.textAlign = 'right';
+      messageDiv.innerHTML = `<div style="display: inline-block; padding: 12px; background-color: var(--button-bg); color: var(--button-fg); border-radius: 6px; max-width: 80%;">${MessageFormatter.escapeHtml(content)}</div>`;
+    } else {
+      messageDiv.innerHTML = `<div class="message-content" style="padding: 12px; background-color: var(--bg-tertiary); border-radius: 6px; max-width: 80%;">${MessageFormatter.formatMessage(content, { enableClickHandlers: true, workspacePath: window.workspacePath || '' })}</div>`;
+      MessageFormatter.attachClickHandlers(messageDiv.querySelector('.message-content'));
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  // Clear chat
+  window.clearChat = function() {
+    if (confirm('Clear all messages?')) {
+      messagesContainer.innerHTML = '<div class="card" style="text-align: center; padding: 24px;"><h3 style="margin-bottom: 8px;">💬 Start a Conversation</h3><p style="color: var(--text-secondary); margin: 0;">Ask questions about your codebase, get help with code, or discuss your project.</p></div>';
+    }
+  };
+
+  // Send button click
+  sendBtn.addEventListener('click', sendMessage);
+
+  // Enter key to send, Shift+Enter for new line
+  chatInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // Focus input on page load
+  window.initChatPage = function() {
+    chatInput.focus();
+  };
+
+  // Listen for file open commands
+  window.addEventListener('message', function(event) {
+    const message = event.data;
+    if (message.command === 'openFile' && window.vscode) {
+      // File opening is handled by ViewProvider
+    }
+  });
+})();
+</script>

@@ -1,0 +1,111 @@
+<div class="page" id="page-profiles">
+  <div style="padding: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <button onclick="window.router?.navigate('dashboard')" class="secondary" style="display: flex; align-items: center; gap: 4px;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;">
+          <path d="M11 8L6 13L5.293 12.293L9.586 8L5.293 3.707L6 3L11 8Z"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    <h1 style="margin-bottom: 8px;">Profiles</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+      Manage multiple API key profiles
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h3 style="margin-bottom: 12px;">Current Profile</h3>
+      <div id="current-profile" style="padding: 12px; background-color: var(--bg-tertiary); border-radius: 4px;">
+        <p style="margin: 0; color: var(--text-secondary);">Loading...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">Saved Profiles</h3>
+        <button id="add-profile-btn">Add Profile</button>
+      </div>
+
+      <div id="profiles-list">
+        <p style="color: var(--text-secondary); text-align: center; padding: 40px 0;">
+          No profiles saved yet.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.initProfilesPage = function() {
+  const currentProfileDiv = document.getElementById('current-profile');
+  const profilesList = document.getElementById('profiles-list');
+  const addProfileBtn = document.getElementById('add-profile-btn');
+
+  // Load profiles
+  if (window.vscode) {
+    window.vscode.postMessage({ command: 'getProfiles' });
+
+    const listener = function(event) {
+      const message = event.data;
+      if (message.command === 'profiles') {
+        window.removeEventListener('message', listener);
+        
+        if (message.currentProfile) {
+          currentProfileDiv.innerHTML = `
+            <p style="margin: 0 0 8px 0; font-weight: 500;">${MessageFormatter.escapeHtml(message.currentProfile.provider)}</p>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 0.875rem;">Model: ${MessageFormatter.escapeHtml(message.currentProfile.modelName || 'N/A')}</p>
+          `;
+        }
+
+        if (message.profiles && message.profiles.length > 0) {
+          profilesList.innerHTML = message.profiles.map(profile => {
+            return `
+              <div class="card" style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <p style="margin: 0 0 4px 0; font-weight: 500;">${MessageFormatter.escapeHtml(profile.provider)}</p>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.875rem;">${MessageFormatter.escapeHtml(profile.modelName || 'N/A')}</p>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="secondary" onclick="switchProfile('${profile.provider}')">Switch</button>
+                    <button class="secondary" onclick="deleteProfile('${profile.provider}')">Delete</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          profilesList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px 0;">No profiles saved yet.</p>';
+        }
+      }
+    };
+    window.addEventListener('message', listener);
+  }
+
+  addProfileBtn.addEventListener('click', function() {
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'openConfigureDialog' });
+    }
+  });
+
+  window.switchProfile = function(provider) {
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'switchProfile', provider: provider });
+    }
+  };
+
+  window.deleteProfile = function(provider) {
+    if (confirm(`Delete profile for ${provider}?`)) {
+      if (window.vscode) {
+        window.vscode.postMessage({ command: 'deleteProfile', provider: provider });
+        // Reload page
+        setTimeout(() => {
+          if (window.initProfilesPage) {
+            window.initProfilesPage();
+          }
+        }, 500);
+      }
+    }
+  };
+};
+</script>

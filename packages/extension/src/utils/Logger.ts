@@ -1,123 +1,103 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as os from 'os'
 
 export class Logger {
-  private static logFile: string | null = null
-  private static logStream: fs.WriteStream | null = null
   private static outputChannel: vscode.OutputChannel | null = null
+  private static logFilePath: string | null = null
+  private static context: vscode.ExtensionContext | null = null
 
-  static initialize(context: vscode.ExtensionContext): void {
+  public static initialize(context: vscode.ExtensionContext): void {
+    this.context = context
+    this.outputChannel = vscode.window.createOutputChannel('Scriptly')
+
+    // Create log file in extension global storage
+    const logDir = context.globalStorageUri.fsPath
     try {
-      // Create output channel once
-      if (!this.outputChannel) {
-        this.outputChannel = vscode.window.createOutputChannel('Scriptly')
-      }
-      
-      // Use extension storage directory for logs
-      const storageUri = context.globalStorageUri
-      const logDir = path.join(storageUri.fsPath, 'logs')
-      
-      // Ensure directory exists
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true })
       }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      this.logFile = path.join(logDir, `scriptly-${timestamp}.log`)
-
-      // Create write stream
-      this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' })
-      
-      // Write initial log with file location
-      this.writeToFile(`[${this.getTimestamp()}] Logger initialized`)
-      this.writeToFile(`[${this.getTimestamp()}] Log file location: ${this.logFile}`)
-      
-      // Log to console with clear message
-      console.log(`[Scriptly Logger] Log file created at: ${this.logFile}`)
-      console.log(`[Scriptly Logger] To view logs, use Command Palette: Ctrl+Shift+P → "Scriptly: Show Log File"`)
-      
-      // Show in output channel
-      if (this.outputChannel) {
-        this.outputChannel.clear()
-        this.outputChannel.appendLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        this.outputChannel.appendLine('📋 SCRIPTLY LOG FILE LOCATION')
-        this.outputChannel.appendLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        this.outputChannel.appendLine(`📁 ${this.logFile}`)
-        this.outputChannel.appendLine('')
-        this.outputChannel.appendLine('💡 QUICK ACCESS:')
-        this.outputChannel.appendLine('   • Command Palette: Ctrl+Shift+P → "Scriptly: Show Log File"')
-        this.outputChannel.appendLine('   • Or click "View Logs" when errors occur')
-        this.outputChannel.appendLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        this.outputChannel.show()
-      }
-      
+      this.logFilePath = path.join(logDir, 'scriptly.log')
+      this.info('Logger', 'Initialized', { logFilePath: this.logFilePath })
     } catch (error) {
-      console.error('[Scriptly Logger] Failed to initialize logger:', error)
+      this.error('Logger', 'Failed to create log directory', error)
     }
   }
 
-  private static getTimestamp(): string {
-    return new Date().toISOString()
+  public static getLogFilePath(): string | null {
+    return this.logFilePath
   }
 
-  private static writeToFile(message: string): void {
-    if (this.logStream) {
-      this.logStream.write(`${message}${os.EOL}`)
-    }
-    // Also log to console
-    console.log(message)
-    // Append to output channel
+  public static showOutputChannel(): void {
     if (this.outputChannel) {
-      this.outputChannel.appendLine(message)
+      this.outputChannel.show(true)
     }
   }
 
-  static log(level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', component: string, message: string, data?: any): void {
-    const timestamp = this.getTimestamp()
-    const logMessage = `[${timestamp}] [${level}] [${component}] ${message}${data ? ` | Data: ${JSON.stringify(data)}` : ''}`
-    
-    this.writeToFile(logMessage)
+  private static writeLog(level: string, component: string, message: string, data?: any): void {
+    const timestamp = new Date().toISOString()
+    const logEntry = {
+      timestamp,
+      level,
+      component,
+      message,
+      ...(data && { data }),
+    }
+
+    const logLine = `[${timestamp}] [${level}] [${component}] ${message}${data ? ' ' + JSON.stringify(data) : ''}`
+
+    // Write to output channel
+    if (this.outputChannel) {
+      this.outputChannel.appendLine(logLine)
+    }
+
+    // Write to log file
+    if (this.logFilePath) {
+      try {
+        fs.appendFileSync(this.logFilePath, logLine + '\n', 'utf8')
+      } catch (error) {
+        // Silently fail if log file write fails
+        console.error('Failed to write to log file:', error)
+      }
+    }
+
+    // Also log to console for development
+    if (level === 'ERROR') {
+      console.error(logLine)
+    } else if (level === 'WARN') {
+      console.warn(logLine)
+    } else {
+      console.log(logLine)
+    }
   }
 
-  static info(component: string, message: string, data?: any): void {
-    this.log('INFO', component, message, data)
+  public static info(component: string, message: string, data?: any): void {
+    this.writeLog('INFO', component, message, data)
   }
 
-  static debug(component: string, message: string, data?: any): void {
-    this.log('DEBUG', component, message, data)
+  public static debug(component: string, message: string, data?: any): void {
+    this.writeLog('DEBUG', component, message, data)
   }
 
-  static warn(component: string, message: string, data?: any): void {
-    this.log('WARN', component, message, data)
+  public static warn(component: string, message: string, data?: any): void {
+    this.writeLog('WARN', component, message, data)
   }
 
-  static error(component: string, message: string, error?: any): void {
-    const errorData = error instanceof Error 
-      ? { message: error.message, stack: error.stack }
+  public static error(component: string, message: string, error?: any): void {
+    const errorData = error instanceof Error
+      ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+        }
       : error
-    this.log('ERROR', component, message, errorData)
+    this.writeLog('ERROR', component, error?.message || String(error), errorData)
   }
 
-  static getLogFilePath(): string | null {
-    return this.logFile
-  }
-
-  static dispose(): void {
-    if (this.logStream) {
-      this.logStream.end()
-      this.logStream = null
-    }
+  public static dispose(): void {
     if (this.outputChannel) {
       this.outputChannel.dispose()
       this.outputChannel = null
-    }
-  }
-
-  static showOutputChannel(): void {
-    if (this.outputChannel) {
-      this.outputChannel.show()
     }
   }
 }

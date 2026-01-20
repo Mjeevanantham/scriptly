@@ -1,0 +1,151 @@
+<div class="page" id="page-research">
+  <div style="padding: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <button onclick="window.router?.navigate('dashboard')" class="secondary" style="display: flex; align-items: center; gap: 4px;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;">
+          <path d="M11 8L6 13L5.293 12.293L9.586 8L5.293 3.707L6 3L11 8Z"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    <h1 style="margin-bottom: 8px;">Research</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+      Semantic search across your codebase
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="form-group">
+        <label class="form-label" for="research-query">Search Query</label>
+        <input 
+          type="text" 
+          id="research-query" 
+          class="form-control" 
+          placeholder="e.g., Where is the login function implemented?"
+        />
+        <div class="form-help">Enter a natural language query about your codebase</div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="search-btn" style="flex: 1;">🔍 Semantic Search</button>
+        <button id="find-refs-btn" class="secondary" style="flex: 1;">📍 Find References</button>
+      </div>
+    </div>
+
+    <div id="research-error" class="message-error" style="display: none; margin-bottom: 16px;"></div>
+
+    <div id="indexing-status" class="card" style="display: none; margin-bottom: 16px;">
+      <p style="margin: 0;">
+        <span class="loader" style="display: inline-block; margin-right: 8px;"></span>
+        <span id="indexing-text">Indexing codebase...</span>
+      </p>
+    </div>
+
+    <div id="research-results" class="card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">Results</h3>
+        <button id="clear-research-btn" class="secondary">Clear</button>
+      </div>
+      <div id="research-content" style="max-height: 500px; overflow-y: auto;">
+        <!-- Results will be displayed here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.initResearchPage = function() {
+  const queryInput = document.getElementById('research-query');
+  const searchBtn = document.getElementById('search-btn');
+  const findRefsBtn = document.getElementById('find-refs-btn');
+  const resultsDiv = document.getElementById('research-results');
+  const resultsContent = document.getElementById('research-content');
+  const errorDiv = document.getElementById('research-error');
+  const clearBtn = document.getElementById('clear-research-btn');
+  const indexingDiv = document.getElementById('indexing-status');
+  const indexingText = document.getElementById('indexing-text');
+
+  function performSearch(action) {
+    const query = queryInput.value.trim();
+    if (!query) {
+      errorDiv.textContent = 'Please enter a search query';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    errorDiv.style.display = 'none';
+    resultsDiv.style.display = 'block';
+    indexingDiv.style.display = 'block';
+    resultsContent.innerHTML = '<div class="text-center"><div class="loader" style="display: inline-block; margin-right: 8px;"></div>Searching...</div>';
+
+    if (window.vscode) {
+      window.vscode.postMessage({
+        command: 'research',
+        action: action,
+        query: query,
+      });
+
+      let isStreaming = false;
+      let fullResponse = '';
+
+      const listener = function(event) {
+        const message = event.data;
+        if (message.command === 'researchResult') {
+          window.removeEventListener('message', listener);
+          indexingDiv.style.display = 'none';
+          
+          if (message.error) {
+            resultsContent.innerHTML = `<div class="message-error">${MessageFormatter.escapeHtml(message.error)}</div>`;
+          } else {
+            const formatted = MessageFormatter.formatMessage(message.result, {
+              enableClickHandlers: true,
+              workspacePath: window.workspacePath || '',
+            });
+            resultsContent.innerHTML = formatted;
+            MessageFormatter.attachClickHandlers(resultsContent);
+          }
+        } else if (message.command === 'researchChunk') {
+          isStreaming = true;
+          fullResponse += message.chunk;
+          indexingDiv.style.display = 'none';
+          resultsDiv.style.display = 'block';
+          const formatted = MessageFormatter.formatMessage(fullResponse, {
+            enableClickHandlers: true,
+            workspacePath: window.workspacePath || '',
+          });
+          resultsContent.innerHTML = formatted + '<div class="loader" style="display: inline-block; margin-left: 8px;"></div>';
+          MessageFormatter.attachClickHandlers(resultsContent);
+        } else if (message.command === 'researchComplete') {
+          if (isStreaming) {
+            window.removeEventListener('message', listener);
+            const formatted = MessageFormatter.formatMessage(fullResponse, {
+              enableClickHandlers: true,
+              workspacePath: window.workspacePath || '',
+            });
+            resultsContent.innerHTML = formatted;
+            MessageFormatter.attachClickHandlers(resultsContent);
+          }
+        } else if (message.command === 'indexingProgress') {
+          indexingText.textContent = message.message || 'Indexing codebase...';
+        }
+      };
+      window.addEventListener('message', listener);
+    }
+  }
+
+  searchBtn.addEventListener('click', () => performSearch('semantic'));
+  findRefsBtn.addEventListener('click', () => performSearch('references'));
+
+  queryInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      performSearch('semantic');
+    }
+  });
+
+  clearBtn.addEventListener('click', function() {
+    resultsDiv.style.display = 'none';
+    resultsContent.innerHTML = '';
+    queryInput.value = '';
+  });
+};
+</script>

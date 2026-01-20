@@ -1,181 +1,231 @@
 import * as vscode from 'vscode'
 import { ConfigService } from './services/ConfigService'
 import { LLMService } from './services/LLMService'
-import { ChatViewProvider, startChat } from './commands/chat'
-import { MainViewProvider } from './ui/MainViewProvider'
-import { configureAPI } from './commands/configure'
-import { gitClone } from './commands/git'
 import { Logger } from './utils/Logger'
+import { IDEDetector } from './utils/IDEDetector'
+import { ViewProvider } from './ui/ViewProvider'
+import { CompletionProvider } from './providers/CompletionProvider'
 
-let configService: ConfigService
-let llmService: LLMService
-let chatViewProvider: ChatViewProvider
-let mainViewProvider: MainViewProvider
+let configService: ConfigService | null = null
+let llmService: LLMService | null = null
+let completionProvider: CompletionProvider | null = null
 
-export function activate(context: vscode.ExtensionContext) {
-  // Initialize logger first
-  Logger.initialize(context)
-  const logPath = Logger.getLogFilePath()
-  
-  Logger.info('Extension', 'Scriptly extension activating...', {
-    logFilePath: logPath,
-  })
+export function activate(context: vscode.ExtensionContext): void {
+  try {
+    // Detect IDE first
+    const ideDetails = IDEDetector.detect()
+    Logger.info('Extension', `Running on ${ideDetails.name} ${ideDetails.version}`, {
+      ideKind: ideDetails.kind,
+      isCompatible: ideDetails.isCompatible,
+    })
 
-  // Show log file location on first activation (already shown by Logger)
-  if (logPath) {
-    Logger.showOutputChannel()
-  }
+    // Initialize logger
+    Logger.initialize(context)
+    const logPath = Logger.getLogFilePath()
 
-  // Initialize services
-  Logger.debug('Extension', 'Initializing ConfigService')
-  configService = new ConfigService(context)
-  Logger.debug('Extension', 'ConfigService initialized')
-  
-  Logger.debug('Extension', 'Initializing LLMService')
-  llmService = new LLMService(configService)
-  Logger.info('Extension', 'Services initialized', {
-    hasConfigService: !!configService,
-    hasLLMService: !!llmService,
-  })
+    Logger.info('Extension', 'Scriptly extension activating...', {
+      logFilePath: logPath,
+      ide: ideDetails.name,
+      ideVersion: ideDetails.version,
+    })
 
-  // Register main view provider (new multi-page UI)
-  Logger.debug('Extension', 'Creating MainViewProvider')
-  mainViewProvider = new MainViewProvider(context, configService, llmService)
-  Logger.debug('Extension', 'Registering MainViewProvider', {
-    viewType: MainViewProvider.viewType,
-  })
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      MainViewProvider.viewType,
-      mainViewProvider
-    )
-  )
-  Logger.info('Extension', 'MainViewProvider registered')
-
-  // Keep old chat provider for backward compatibility
-  Logger.debug('Extension', 'Creating ChatViewProvider for backward compatibility')
-  chatViewProvider = new ChatViewProvider(context)
-  chatViewProvider.setLLMService(llmService)
-  Logger.debug('Extension', 'ChatViewProvider initialized')
-
-  // Register commands
-  Logger.debug('Extension', 'Registering commands')
-  
-  const chatCommand = vscode.commands.registerCommand(
-    'scriptly.startChat',
-    () => {
-      Logger.info('Extension', 'Command executed: scriptly.startChat')
-      startChat(context, llmService)
-    }
-  )
-
-  const configureCommand = vscode.commands.registerCommand(
-    'scriptly.configureAPI',
-    () => {
-      Logger.info('Extension', 'Command executed: scriptly.configureAPI')
-      configureAPI(configService)
-    }
-  )
-
-  const gitCloneCommand = vscode.commands.registerCommand(
-    'scriptly.gitClone',
-    () => {
-      Logger.info('Extension', 'Command executed: scriptly.gitClone')
-      gitClone()
-    }
-  )
-
-  const refreshChatCommand = vscode.commands.registerCommand(
-    'scriptly.chatView.refresh',
-    async () => {
-      Logger.info('Extension', 'Command executed: scriptly.chatView.refresh')
-      if (mainViewProvider) {
-        Logger.debug('Extension', 'Refreshing MainViewProvider')
-        mainViewProvider.refresh()
-      } else if (chatViewProvider) {
-        Logger.debug('Extension', 'Refreshing ChatViewProvider')
-        await chatViewProvider.refresh()
-      } else {
-        Logger.warn('Extension', 'No view provider available to refresh')
-      }
-    }
-  )
-
-  const showLogsCommand = vscode.commands.registerCommand(
-    'scriptly.showLogs',
-    async () => {
-      Logger.info('Extension', 'Command executed: scriptly.showLogs')
-      const logPath = Logger.getLogFilePath()
-      if (logPath) {
-        Logger.debug('Extension', 'Showing log file options', { logPath })
-        // Show in notification
-        const action = await vscode.window.showInformationMessage(
-          `📋 Scriptly Log File\n${logPath}`,
-          'Open Log File',
-          'Copy Path',
-          'Reveal in Explorer'
-        )
-        
-        if (action === 'Open Log File') {
-          Logger.debug('Extension', 'Opening log file in editor')
-          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(logPath))
-          await vscode.window.showTextDocument(doc)
-        } else if (action === 'Copy Path') {
-          Logger.debug('Extension', 'Copying log file path to clipboard')
-          await vscode.env.clipboard.writeText(logPath)
-          vscode.window.showInformationMessage('Log file path copied to clipboard!')
-        } else if (action === 'Reveal in Explorer') {
-          Logger.debug('Extension', 'Revealing log file in file explorer')
-          vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(logPath))
+    // Show output channel
+    if (logPath) {
+      setTimeout(() => {
+        try {
+          Logger.showOutputChannel()
+        } catch (error) {
+          console.error('Failed to show output channel:', error)
         }
-      } else {
-        Logger.warn('Extension', 'Log file not available')
-        vscode.window.showWarningMessage('Log file not available. Logger may not be initialized.')
+      }, 100)
+    }
+
+    // Initialize services
+    try {
+      Logger.debug('Extension', 'Initializing ConfigService')
+      configService = new ConfigService(context)
+      Logger.debug('Extension', 'ConfigService initialized')
+
+      Logger.debug('Extension', 'Initializing LLMService')
+      llmService = new LLMService(configService)
+      
+      Logger.debug('Extension', 'Initializing CompletionProvider')
+      completionProvider = new CompletionProvider(llmService)
+      
+      Logger.info('Extension', 'Services initialized', {
+        hasConfigService: !!configService,
+        hasLLMService: !!llmService,
+        hasCompletionProvider: !!completionProvider,
+      })
+    } catch (error) {
+      Logger.error('Extension', 'Failed to initialize services', error)
+      vscode.window.showErrorMessage(
+        'Scriptly: Failed to initialize services. Check the output panel for details.'
+      )
+      return
+    }
+
+    // Register webview provider
+    try {
+      Logger.debug('Extension', 'Registering ViewProvider')
+      if (!configService || !llmService) {
+        throw new Error('ConfigService or LLMService not initialized')
       }
-    }
-  )
 
-  context.subscriptions.push(
-    chatCommand,
-    configureCommand,
-    gitCloneCommand,
-    refreshChatCommand,
-    showLogsCommand
-  )
-
-  // Check if API key is configured
-  Logger.debug('Extension', 'Checking if API key is configured on activation')
-  configService.getApiKey('openai').then((apiKey) => {
-    if (!apiKey) {
-      Logger.info('Extension', 'No API key found, prompting user to configure')
-      vscode.window
-        .showInformationMessage(
-          'Scriptly: Configure your API key to get started',
-          'Configure'
-        )
-        .then((selection) => {
-          if (selection === 'Configure') {
-            Logger.debug('Extension', 'User chose to configure API key')
-            vscode.commands.executeCommand('scriptly.configureAPI')
-          } else {
-            Logger.debug('Extension', 'User dismissed API key configuration prompt')
-          }
+      const viewProvider = new ViewProvider(context, configService, llmService)
+      context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(ViewProvider.viewType, viewProvider, {
+          webviewOptions: {
+            retainContextWhenHidden: true,
+          },
         })
-    } else {
-      Logger.debug('Extension', 'API key found, extension ready to use')
+      )
+      Logger.info('Extension', 'ViewProvider registered')
+    } catch (error) {
+      Logger.error('Extension', 'Failed to register ViewProvider', error)
     }
-  }).catch((error) => {
-    Logger.error('Extension', 'Error checking API key on activation', error)
-  })
-  
-  Logger.info('Extension', 'Scriptly extension activated successfully', {
-    commandsRegistered: 5,
-    viewProvidersRegistered: 2,
-  })
+
+    // Register completion provider
+    try {
+      Logger.debug('Extension', 'Registering CompletionProvider')
+      if (completionProvider) {
+        context.subscriptions.push(
+          vscode.languages.registerInlineCompletionItemProvider(
+            { pattern: '**' },
+            completionProvider
+          )
+        )
+        Logger.info('Extension', 'CompletionProvider registered')
+      }
+    } catch (error) {
+      Logger.error('Extension', 'Failed to register CompletionProvider', error)
+    }
+
+    // Register commands (async import)
+    Promise.all([
+      import('./commands/configure'),
+      import('./commands/git'),
+      import('./commands/utils'),
+    ])
+      .then(([configureModule, gitModule, utilsModule]) => {
+        try {
+          Logger.debug('Extension', 'Registering commands')
+
+          if (!configService) {
+            throw new Error('ConfigService not initialized')
+          }
+
+          const configureCommand = vscode.commands.registerCommand('scriptly.configureAPI', () => {
+            configureModule.configureAPI(configService!)
+          })
+
+          const gitCloneCommand = vscode.commands.registerCommand('scriptly.gitClone', () => {
+            gitModule.gitClone()
+          })
+
+          const showLogsCommand = vscode.commands.registerCommand('scriptly.showLogs', () => {
+            utilsModule.showLogs()
+          })
+
+          const clearStorageCommand = vscode.commands.registerCommand('scriptly.clearStorage', () => {
+            utilsModule.clearStorage(configService!)
+          })
+
+          const startChatCommand = vscode.commands.registerCommand('scriptly.startChat', () => {
+            vscode.commands.executeCommand('scriptly.chatView.focus')
+          })
+
+          context.subscriptions.push(
+            configureCommand,
+            gitCloneCommand,
+            showLogsCommand,
+            clearStorageCommand,
+            startChatCommand
+          )
+
+          Logger.info('Extension', 'Commands registered successfully', { count: 5 })
+        } catch (error) {
+          Logger.error('Extension', 'Failed to register commands', error)
+        }
+      })
+      .catch((error) => {
+        Logger.error('Extension', 'Failed to import command modules', error)
+      })
+
+    // Check API key (non-blocking)
+    setTimeout(() => {
+      if (!configService) {
+        Logger.warn('Extension', 'ConfigService not available for API key check')
+        return
+      }
+
+      configService
+        .getApiKey('openai')
+        .then(
+          (apiKey) => {
+            if (!apiKey) {
+              Logger.info('Extension', 'No API key found, prompting user to configure')
+              vscode.window
+                .showInformationMessage('Scriptly: Configure your API key to get started', 'Configure')
+                .then(
+                  (selection) => {
+                    if (selection === 'Configure') {
+                      Logger.debug('Extension', 'User chose to configure API key')
+                      vscode.commands.executeCommand('scriptly.configureAPI').then(
+                        () => {},
+                        (err: unknown) => {
+                          Logger.error('Extension', 'Error executing configureAPI command', err)
+                        }
+                      )
+                    }
+                  },
+                  (error: unknown) => {
+                    Logger.error('Extension', 'Error showing API key prompt', error)
+                  }
+                )
+            } else {
+              Logger.debug('Extension', 'API key found, extension ready to use')
+            }
+          },
+          (error) => {
+            Logger.error('Extension', 'Error checking API key on activation', error)
+          }
+        )
+    }, 500)
+
+    Logger.info('Extension', 'Scriptly extension activated successfully', {
+      ide: ideDetails.name,
+      ideVersion: ideDetails.version,
+    })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+
+    console.error('[Scriptly Extension] Activation failed:', errorMessage, errorStack)
+
+    try {
+      Logger.error('Extension', 'Activation failed', {
+        message: errorMessage,
+        stack: errorStack,
+      })
+    } catch (logError) {
+      console.error('[Scriptly Extension] Failed to log activation error:', logError)
+    }
+
+    vscode.window.showErrorMessage(
+      `Scriptly extension failed to activate: ${errorMessage}. Please check the output panel for details.`
+    )
+  }
 }
 
-export function deactivate() {
-  Logger.info('Extension', 'Scriptly extension deactivating...')
-  Logger.dispose()
+export function deactivate(): void {
+  try {
+    Logger.info('Extension', 'Scriptly extension deactivating...')
+    Logger.dispose()
+  } catch (error) {
+    console.error('[Scriptly Extension] Deactivation error:', error)
+  }
 }
 
+// Export services for use in other modules
+export { configService, llmService }

@@ -1,0 +1,151 @@
+<div class="page" id="page-code-review">
+  <div style="padding: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+      <button onclick="window.router?.navigate('dashboard')" class="secondary" style="display: flex; align-items: center; gap: 4px;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;">
+          <path d="M11 8L6 13L5.293 12.293L9.586 8L5.293 3.707L6 3L11 8Z"/>
+        </svg>
+        Back
+      </button>
+    </div>
+    <h1 style="margin-bottom: 8px;">Code Review</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+      Analyze, refactor, and test your code
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h3 style="margin-bottom: 12px;">Select File to Review</h3>
+      <div style="display: flex; gap: 8px;">
+        <button id="select-file-btn">Select File</button>
+        <span id="selected-file" style="flex: 1; padding: 8px; color: var(--text-secondary); align-self: center;">
+          No file selected
+        </span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
+      <button id="analyze-btn" class="card" style="text-align: left; cursor: pointer; border: 1px solid var(--border-color); padding: 20px;">
+        <h3 style="margin-bottom: 8px;">🔍 Analyze Code</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Find bugs, code smells, and improvements
+        </p>
+      </button>
+
+      <button id="refactor-btn" class="card" style="text-align: left; cursor: pointer; border: 1px solid var(--border-color); padding: 20px;">
+        <h3 style="margin-bottom: 8px;">🔧 Suggest Refactoring</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Get refactoring suggestions
+        </p>
+      </button>
+
+      <button id="test-btn" class="card" style="text-align: left; cursor: pointer; border: 1px solid var(--border-color); padding: 20px;">
+        <h3 style="margin-bottom: 8px;">🧪 Generate Tests</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Create comprehensive test cases
+        </p>
+      </button>
+
+      <button id="bugs-btn" class="card" style="text-align: left; cursor: pointer; border: 1px solid var(--border-color); padding: 20px;">
+        <h3 style="margin-bottom: 8px;">🐛 Find Bugs</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">
+          Detect potential bugs and issues
+        </p>
+      </button>
+    </div>
+
+    <div id="review-error" class="message-error" style="display: none; margin-bottom: 16px;"></div>
+
+    <div id="review-results" class="card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">Results</h3>
+        <button id="clear-results-btn" class="secondary">Clear</button>
+      </div>
+      <div id="results-content" style="max-height: 500px; overflow-y: auto;">
+        <!-- Results will be displayed here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.initCodeReviewPage = function() {
+  const selectFileBtn = document.getElementById('select-file-btn');
+  const selectedFileSpan = document.getElementById('selected-file');
+  const analyzeBtn = document.getElementById('analyze-btn');
+  const refactorBtn = document.getElementById('refactor-btn');
+  const testBtn = document.getElementById('test-btn');
+  const bugsBtn = document.getElementById('bugs-btn');
+  const resultsDiv = document.getElementById('review-results');
+  const resultsContent = document.getElementById('results-content');
+  const errorDiv = document.getElementById('review-error');
+  const clearResultsBtn = document.getElementById('clear-results-btn');
+
+  let selectedFilePath = null;
+
+  // Select file
+  selectFileBtn.addEventListener('click', function() {
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'selectFile' });
+      
+      const listener = function(event) {
+        const message = event.data;
+        if (message.command === 'fileSelected') {
+          window.removeEventListener('message', listener);
+          selectedFilePath = message.filepath;
+          selectedFileSpan.textContent = message.filepath.split(/[/\\]/).pop() || message.filepath;
+        }
+      };
+      window.addEventListener('message', listener);
+    }
+  });
+
+  // Perform analysis
+  function performAction(action) {
+    if (!selectedFilePath) {
+      errorDiv.textContent = 'Please select a file first';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    errorDiv.style.display = 'none';
+    resultsDiv.style.display = 'block';
+    resultsContent.innerHTML = '<div class="text-center"><div class="loader" style="display: inline-block; margin-right: 8px;"></div>Analyzing...</div>';
+
+    if (window.vscode) {
+      window.vscode.postMessage({
+        command: 'codeReview',
+        action: action,
+        filepath: selectedFilePath,
+      });
+
+      const listener = function(event) {
+        const message = event.data;
+        if (message.command === 'codeReviewResult') {
+          window.removeEventListener('message', listener);
+          if (message.error) {
+            resultsContent.innerHTML = `<div class="message-error">${MessageFormatter.escapeHtml(message.error)}</div>`;
+          } else {
+            const formatted = MessageFormatter.formatMessage(message.result, {
+              enableClickHandlers: true,
+              workspacePath: window.workspacePath || '',
+            });
+            resultsContent.innerHTML = formatted;
+            MessageFormatter.attachClickHandlers(resultsContent);
+          }
+        }
+      };
+      window.addEventListener('message', listener);
+    }
+  }
+
+  analyzeBtn.addEventListener('click', () => performAction('analyze'));
+  refactorBtn.addEventListener('click', () => performAction('refactor'));
+  testBtn.addEventListener('click', () => performAction('test'));
+  bugsBtn.addEventListener('click', () => performAction('bugs'));
+
+  clearResultsBtn.addEventListener('click', function() {
+    resultsDiv.style.display = 'none';
+    resultsContent.innerHTML = '';
+  });
+};
+</script>

@@ -1,244 +1,185 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as crypto from 'crypto'
 import { CodeChunk } from '../types'
 import { Logger } from '../utils/Logger'
 
 export class CodeIndexer {
-  private chunks: Map<string, CodeChunk[]> = new Map()
-  private fileHashes: Map<string, string> = new Map()
+  private chunks: CodeChunk[] = []
+  private isIndexed = false
 
-  async indexWorkspace(workspacePath: string): Promise<void> {
-    Logger.info('CodeIndexer', 'Starting workspace indexing', { workspacePath })
-    const files = await this.getAllCodeFiles(workspacePath)
-    Logger.info('CodeIndexer', 'Found code files to index', { fileCount: files.length })
-    
-    for (const file of files) {
-      await this.indexFile(file)
+  async indexWorkspace(): Promise<CodeChunk[]> {
+    try {
+      Logger.info('CodeIndexer', 'Starting workspace indexing')
+
+      const workspaceFolders = vscode.workspace.workspaceFolders
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        Logger.warn('CodeIndexer', 'No workspace folders found')
+        return []
+      }
+
+      this.chunks = []
+      const workspaceRoot = workspaceFolders[0].uri.fsPath
+
+      await this.indexDirectory(workspaceRoot, workspaceRoot)
+
+      this.isIndexed = true
+      Logger.info('CodeIndexer', 'Workspace indexing completed', {
+        chunksCount: this.chunks.length,
+      })
+
+      return this.chunks
+    } catch (error) {
+      Logger.error('CodeIndexer', 'Error indexing workspace', error)
+      throw error
     }
-    
-    Logger.info('CodeIndexer', 'Workspace indexing completed', {
-      totalFiles: files.length,
-      indexedFiles: this.chunks.size,
-    })
   }
 
-  async indexFile(filePath: string): Promise<void> {
-    Logger.debug('CodeIndexer', 'Indexing file', { filePath })
+  private async indexDirectory(dirPath: string, workspaceRoot: string): Promise<void> {
     try {
-      const content = fs.readFileSync(filePath, 'utf8')
-      const hash = this.computeHash(content)
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true })
 
-      // Skip if file hasn't changed
-      const existingHash = this.fileHashes.get(filePath)
-      if (existingHash === hash) {
-        Logger.debug('CodeIndexer', 'File unchanged, skipping', { filePath })
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name)
+        const relativePath = path.relative(workspaceRoot, fullPath)
+
+        // Skip common ignore patterns
+        if (
+          entry.name.startsWith('.') ||
+          entry.name === 'node_modules' ||
+          entry.name === 'dist' ||
+          entry.name === 'build' ||
+          entry.name === '.next' ||
+          entry.name === 'out'
+        ) {
+          continue
+        }
+
+        if (entry.isDirectory()) {
+          await this.indexDirectory(fullPath, workspaceRoot)
+        } else if (entry.isFile()) {
+          await this.indexFile(fullPath, relativePath)
+        }
+      }
+    } catch (error) {
+      Logger.debug('CodeIndexer', `Error indexing directory: ${dirPath}`, error)
+    }
+  }
+
+  private async indexFile(filePath: string, relativePath: string): Promise<void> {
+    try {
+      // Only index code files
+      const ext = path.extname(filePath)
+      const codeExtensions = [
+        '.ts',
+        '.tsx',
+        '.js',
+        '.jsx',
+        '.py',
+        '.java',
+        '.cpp',
+        '.c',
+        '.cs',
+        '.go',
+        '.rs',
+        '.php',
+        '.rb',
+        '.swift',
+        '.kt',
+        '.vue',
+        '.svelte',
+      ]
+
+      if (!codeExtensions.includes(ext)) {
         return
       }
 
-      Logger.debug('CodeIndexer', 'File changed or new, indexing', {
-        filePath,
-        contentLength: content.length,
-        hadPreviousHash: !!existingHash,
-      })
+      const content = fs.readFileSync(filePath, 'utf8')
+      const lines = content.split('\n')
 
-      this.fileHashes.set(filePath, hash)
-      const chunks = this.chunkFile(filePath, content)
-      this.chunks.set(filePath, chunks)
-      
-      Logger.debug('CodeIndexer', 'File indexed successfully', {
-        filePath,
-        chunkCount: chunks.length,
+      // Split large files into chunks
+      const chunkSize = 100
+      for (let i = 0; i < lines.length; i += chunkSize) {
+        const chunkLines = lines.slice(i, i + chunkSize)
+        const chunkContent = chunkLines.join('\n')
+
+        const chunk: CodeChunk = {
+          id: `${relativePath}-${i}`,
+          filePath: relativePath,
+          content: chunkContent,
+          startLine: i + 1,
+          language: ext.substring(1),
+          hash: this.hashContent(chunkContent),
+        }
+
+        this.chunks.push(chunk)
+      }
+
+      Logger.debug('CodeIndexer', `Indexed file: ${relativePath}`, {
+        lines: lines.length,
+        chunks: Math.ceil(lines.length / chunkSize),
       })
     } catch (error) {
-      Logger.error('CodeIndexer', `Failed to index file ${filePath}`, error)
+      Logger.debug('CodeIndexer', `Error indexing file: ${filePath}`, error)
     }
   }
 
-  getContextByFile(
-    filePath: string,
-    lineNumber: number,
-    contextLines: number = 10
-  ): CodeChunk[] {
-    Logger.debug('CodeIndexer', 'Getting context by file', {
-      filePath,
-      lineNumber,
-      contextLines,
-    })
-    
-    const chunks = this.chunks.get(filePath) || []
-    const filtered = chunks.filter((chunk) => {
-      const start = chunk.startLine
-      const end = start + chunk.content.split('\n').length
-      return (
-        lineNumber >= start - contextLines &&
-        lineNumber <= end + contextLines
-      )
-    })
-    
-    Logger.debug('CodeIndexer', 'Context chunks retrieved', {
-      filePath,
-      totalChunks: chunks.length,
-      filteredChunks: filtered.length,
-    })
-    
-    return filtered
+  private hashContent(content: string): string {
+    // Simple hash function
+    let hash = 0
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash
+    }
+    return hash.toString(36)
   }
 
-  searchByContent(query: string): CodeChunk[] {
-    Logger.info('CodeIndexer', 'Searching by content', {
-      query,
-      queryLength: query.length,
-      indexedFiles: this.chunks.size,
-    })
-    
-    const results: CodeChunk[] = []
+  getChunks(): CodeChunk[] {
+    return this.chunks
+  }
+
+  isWorkspaceIndexed(): boolean {
+    return this.isIndexed
+  }
+
+  async search(query: string): Promise<CodeChunk[]> {
+    if (!this.isIndexed) {
+      await this.indexWorkspace()
+    }
+
     const lowerQuery = query.toLowerCase()
+    const results: Array<{ chunk: CodeChunk; score: number }> = []
 
-    for (const [filePath, chunks] of this.chunks.entries()) {
-      for (const chunk of chunks) {
-        if (chunk.content.toLowerCase().includes(lowerQuery)) {
-          results.push(chunk)
-        }
+    for (const chunk of this.chunks) {
+      let score = 0
+
+      // Score based on filename match
+      if (chunk.filePath.toLowerCase().includes(lowerQuery)) {
+        score += 10
+      }
+
+      // Score based on content match
+      const contentLower = chunk.content.toLowerCase()
+      if (contentLower.includes(lowerQuery)) {
+        score += 5
+        // Boost score for multiple matches
+        const matches = (contentLower.match(new RegExp(lowerQuery, 'g')) || []).length
+        score += Math.min(matches, 5)
+      }
+
+      // Score based on language match
+      if (chunk.language.toLowerCase() === lowerQuery) {
+        score += 3
+      }
+
+      if (score > 0) {
+        results.push({ chunk, score })
       }
     }
 
-    const topResults = results.slice(0, 10) // Return top 10 matches
-    Logger.info('CodeIndexer', 'Search completed', {
-      totalMatches: results.length,
-      returnedResults: topResults.length,
-    })
-    
-    return topResults
-  }
-
-  onFileChanged(filePath: string): void {
-    Logger.debug('CodeIndexer', 'File changed event received', { filePath })
-    this.indexFile(filePath)
-  }
-
-  invalidateCache(): void {
-    Logger.info('CodeIndexer', 'Invalidating cache', {
-      filesInCache: this.chunks.size,
-      hashesInCache: this.fileHashes.size,
-    })
-    this.chunks.clear()
-    this.fileHashes.clear()
-    Logger.debug('CodeIndexer', 'Cache invalidated')
-  }
-
-  private async getAllCodeFiles(
-    rootPath: string
-  ): Promise<string[]> {
-    const files: string[] = []
-    const codeExtensions = [
-      '.ts',
-      '.tsx',
-      '.js',
-      '.jsx',
-      '.py',
-      '.java',
-      '.go',
-      '.rs',
-      '.sql',
-    ]
-    const ignoreDirs = ['node_modules', '.git', 'dist', 'build', 'out']
-
-    const walkDir = (dir: string): void => {
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true })
-
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name)
-
-          if (entry.isDirectory()) {
-            if (!ignoreDirs.includes(entry.name)) {
-              walkDir(fullPath)
-            }
-          } else if (entry.isFile()) {
-            const ext = path.extname(entry.name)
-            if (codeExtensions.includes(ext)) {
-              files.push(fullPath)
-            }
-          }
-        }
-      } catch (error) {
-        // Skip inaccessible directories
-      }
-    }
-
-    walkDir(rootPath)
-    return files
-  }
-
-  private chunkFile(filePath: string, content: string): CodeChunk[] {
-    const lines = content.split('\n')
-    const chunks: CodeChunk[] = []
-    const language = this.detectLanguage(filePath)
-
-    // Simple chunking by functions/classes
-    let currentChunk: string[] = []
-    let startLine = 0
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-
-      // Simple heuristic: start new chunk on function/class definition
-      if (
-        /^(export\s+)?(function|class|const|let|var)\s+\w+/.test(line) &&
-        currentChunk.length > 0
-      ) {
-        if (currentChunk.length > 0) {
-          chunks.push({
-            id: `${filePath}:${startLine}`,
-            filePath,
-            content: currentChunk.join('\n'),
-            startLine,
-            language,
-            hash: this.computeHash(currentChunk.join('\n')),
-          })
-        }
-        currentChunk = [line]
-        startLine = i
-      } else {
-        currentChunk.push(line)
-      }
-    }
-
-    // Add remaining chunk
-    if (currentChunk.length > 0) {
-      chunks.push({
-        id: `${filePath}:${startLine}`,
-        filePath,
-        content: currentChunk.join('\n'),
-        startLine,
-        language,
-        hash: this.computeHash(currentChunk.join('\n')),
-      })
-    }
-
-    return chunks
-  }
-
-  private detectLanguage(filePath: string): string {
-    const ext = path.extname(filePath).toLowerCase()
-    const langMap: Record<string, string> = {
-      '.ts': 'typescript',
-      '.tsx': 'typescript',
-      '.js': 'javascript',
-      '.jsx': 'javascript',
-      '.py': 'python',
-      '.java': 'java',
-      '.go': 'go',
-      '.rs': 'rust',
-      '.sql': 'sql',
-    }
-    return langMap[ext] || 'text'
-  }
-
-  private computeHash(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex')
+    // Sort by score and return top results
+    results.sort((a, b) => b.score - a.score)
+    return results.slice(0, 20).map((r) => r.chunk)
   }
 }
-
