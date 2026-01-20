@@ -1,6 +1,0 @@
-{
-  "buildCommand": "pnpm --filter website build",
-  "installCommand": "pnpm install",
-  "framework": null,
-  "rootDirectory": "packages/website"
-}
