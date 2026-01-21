@@ -4,7 +4,7 @@
 
 **Free, unified IDE with AI-powered coding assistance**
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=jeeva-dev.scriptly)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 </div>

@@ -2,7 +2,7 @@
   "name": "scriptly",
   "displayName": "Scriptly - AI Code Assistant",
   "description": "Free, unified IDE with AI-powered coding assistance. Chat with your codebase using AI.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "jeeva-dev",
   "icon": "media/icon.png",
   "galleryBanner": {
