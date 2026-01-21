@@ -2,7 +2,7 @@
   "name": "scriptly",
   "displayName": "Scriptly - AI Code Assistant",
   "description": "Free, unified IDE with AI-powered coding assistance. Chat with your codebase using AI.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "jeeva-dev",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -51,7 +51,7 @@
         {
           "id": "scriptly",
           "title": "Scriptly",
-          "icon": "media/icon.png"
+          "icon": "media/chatbot-icon.svg"
         }
       ]
     },
@@ -133,7 +133,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p ./",
+    "build": "tsc -p ./ && npm run copy-ui",
+    "copy-ui": "node scripts/copy-ui.js",
     "dev": "tsc -watch -p ./",
     "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",

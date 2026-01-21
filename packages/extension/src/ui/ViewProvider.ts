@@ -365,34 +365,44 @@ export class ViewProvider implements vscode.WebviewViewProvider {
 </html>`
   }
 
+  private _loadFile(relativePath: string[]): string {
+    // Try out directory first (production), then src directory (development)
+    const paths = [
+      path.join(this._context.extensionPath, 'out', ...relativePath),
+      path.join(this._context.extensionPath, 'src', ...relativePath),
+    ]
+
+    for (const filePath of paths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          return fs.readFileSync(filePath, 'utf8')
+        }
+      } catch (error) {
+        // Continue to next path
+      }
+    }
+
+    // If neither path works, log error
+    Logger.error('ViewProvider', `Failed to load file: ${relativePath.join('/')}`, {
+      triedPaths: paths,
+    })
+    return ''
+  }
+
   private _loadHtmlFile(filename: string): string {
-    try {
-      const filePath = path.join(this._context.extensionPath, 'src', 'ui', 'pages', filename)
-      return fs.readFileSync(filePath, 'utf8')
-    } catch (error) {
-      Logger.error('ViewProvider', `Failed to load HTML file: ${filename}`, error)
+    const content = this._loadFile(['ui', 'pages', filename])
+    if (!content) {
       return `<div>Error loading ${filename}</div>`
     }
+    return content
   }
 
   private _loadCssFile(filename: string): string {
-    try {
-      const filePath = path.join(this._context.extensionPath, 'src', 'ui', 'styles', filename)
-      return fs.readFileSync(filePath, 'utf8')
-    } catch (error) {
-      Logger.error('ViewProvider', `Failed to load CSS file: ${filename}`, error)
-      return ''
-    }
+    return this._loadFile(['ui', 'styles', filename])
   }
 
   private _loadJsFile(filename: string): string {
-    try {
-      const filePath = path.join(this._context.extensionPath, 'src', 'ui', 'scripts', filename)
-      return fs.readFileSync(filePath, 'utf8')
-    } catch (error) {
-      Logger.error('ViewProvider', `Failed to load JS file: ${filename}`, error)
-      return ''
-    }
+    return this._loadFile(['ui', 'scripts', filename])
   }
 
   private async _handleGetSettings(): Promise<void> {
